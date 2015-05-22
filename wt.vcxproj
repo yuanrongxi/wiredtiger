@@ -69,16 +69,27 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <None Include="misc.inl" />
+    <None Include="mutex.inl" />
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="error.h" />
+    <ClInclude Include="extern.h" />
     <ClInclude Include="gcc.h" />
     <ClInclude Include="hardware.h" />
+    <ClInclude Include="misc.h" />
+    <ClInclude Include="mutex.h" />
+    <ClInclude Include="posix.h" />
+    <ClInclude Include="posix\flags.h" />
     <ClInclude Include="verify_build.h" />
     <ClInclude Include="wiredtiger.h" />
     <ClInclude Include="wiredtiger_config.h" />
+    <ClInclude Include="wiredtiger_ext.h" />
+    <ClInclude Include="wt_internal.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="posix\os_mt_rw.c" />
     <ClCompile Include="test\base_test.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

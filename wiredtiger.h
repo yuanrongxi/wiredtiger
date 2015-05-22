@@ -337,6 +337,7 @@ const char *wiredtiger_version(int *majorp, int *minorp, int *patchp);
 
 /*¥ÌŒÛ¬Î∂®“Â*/
 #define	WT_ROLLBACK					-31800
+#define	WT_DUPLICATE_KEY			-31801
 #define	WT_ERROR					-31802
 #define	WT_NOTFOUND					-31803
 #define	WT_PANIC					-31804

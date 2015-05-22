@@ -1,9 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="public">
-      <UniqueIdentifier>{d69f26b6-4fae-49a1-9c3d-e2b30e839828}</UniqueIdentifier>
-    </Filter>
     <Filter Include="include">
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
@@ -19,9 +16,18 @@
     <Filter Include="test">
       <UniqueIdentifier>{fde1763d-a8f8-4ba1-936e-b426c115fea6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\posix">
+      <UniqueIdentifier>{226ad2a8-c176-49a1-bc98-aeaa92462c83}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
+    <None Include="mutex.inl">
+      <Filter>inl</Filter>
+    </None>
+    <None Include="misc.inl">
+      <Filter>inl</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="wiredtiger_config.h">
@@ -39,10 +45,37 @@
     <ClInclude Include="hardware.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="misc.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="wt_internal.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="wiredtiger_ext.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="extern.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="posix.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="mutex.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="error.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="posix\flags.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="test\base_test.c">
       <Filter>test</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_mt_rw.c">
+      <Filter>c\posix</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
