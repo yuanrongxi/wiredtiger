@@ -82,6 +82,8 @@
     <ClInclude Include="mutex.h" />
     <ClInclude Include="posix.h" />
     <ClInclude Include="posix\flags.h" />
+    <ClInclude Include="queque.h" />
+    <ClInclude Include="session.h" />
     <ClInclude Include="verify_build.h" />
     <ClInclude Include="wiredtiger.h" />
     <ClInclude Include="wiredtiger_config.h" />
@@ -90,6 +92,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="posix\os_mt_rw.c" />
+    <ClCompile Include="support\cksum.c" />
+    <ClCompile Include="support\hash_city.c" />
+    <ClCompile Include="support\hash_fnv.c" />
+    <ClCompile Include="support\hex.c" />
+    <ClCompile Include="support\huffman.c" />
+    <ClCompile Include="support\pow.c" />
+    <ClCompile Include="support\rand.c" />
     <ClCompile Include="test\base_test.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

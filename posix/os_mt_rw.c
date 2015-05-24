@@ -68,7 +68,7 @@ int __wt_readlock(WT_SESSION_IMPL *session, WT_RWLOCK *rwlock)
 	/*获得s-lock,将readers设置成和users一致，这样可以让其他的线程也可以获得s-lock*/
 	++ l->s.readers ++;
 
-	retrun 0;
+	return 0;
 }
 
 int __wt_readunlock(WT_SESSION_IMPL* session, WT_RWLOCK* rwlock)

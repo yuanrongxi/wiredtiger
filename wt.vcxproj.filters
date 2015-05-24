@@ -19,6 +19,9 @@
     <Filter Include="c\posix">
       <UniqueIdentifier>{226ad2a8-c176-49a1-bc98-aeaa92462c83}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\supoprt">
+      <UniqueIdentifier>{f48e9082-394b-4727-bec8-430350567145}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -69,6 +72,12 @@
     <ClInclude Include="posix\flags.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="queque.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="session.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="test\base_test.c">
@@ -76,6 +85,27 @@
     </ClCompile>
     <ClCompile Include="posix\os_mt_rw.c">
       <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="support\cksum.c">
+      <Filter>c\supoprt</Filter>
+    </ClCompile>
+    <ClCompile Include="support\rand.c">
+      <Filter>c\supoprt</Filter>
+    </ClCompile>
+    <ClCompile Include="support\hash_fnv.c">
+      <Filter>c\supoprt</Filter>
+    </ClCompile>
+    <ClCompile Include="support\pow.c">
+      <Filter>c\supoprt</Filter>
+    </ClCompile>
+    <ClCompile Include="support\huffman.c">
+      <Filter>c\supoprt</Filter>
+    </ClCompile>
+    <ClCompile Include="support\hash_city.c">
+      <Filter>c\supoprt</Filter>
+    </ClCompile>
+    <ClCompile Include="support\hex.c">
+      <Filter>c\supoprt</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

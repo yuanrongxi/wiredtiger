@@ -6,6 +6,7 @@ extern "C" {
 #include "wiredtiger_ext.h"
 
 /***WiredTiger system include files**/
+#include <stdint.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -19,13 +20,12 @@ extern "C" {
 #include <pthread.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 
-//#include "queue.h"
+#include "queue.h"
 
 struct __wt_addr;
 typedef struct __wt_addr WT_ADDR;
@@ -259,7 +259,7 @@ typedef struct __wt_update WT_UPDATE;
 //#include "schema.h"
 //#include "txn.h"
 
-//#include "session.h"
+#include "session.h"
 //#include "connection.h"
 
 //#include "extern.h"
