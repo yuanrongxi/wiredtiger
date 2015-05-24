@@ -65,8 +65,9 @@ int __wt_readlock(WT_SESSION_IMPL *session, WT_RWLOCK *rwlock)
 			__wt_sleep(0, 10);
 	}
 
-	/*获得s-lock,将readers设置成和users一致，这样可以让其他的线程也可以获得s-lock*/
-	++ l->s.readers ++;
+	/*获得s-lock,将readers设置成和users一致，这样可以让其他的线程也可以获得s-lock,这里没有原子操作是因为即使有多个线程在
+	上面的for循环中等待，但是reader是串行+1的，只有上一个reader +1,才会让下一个等待的线程退出上面的循环*/
+	++ l->s.readers;
 
 	return 0;
 }
@@ -77,7 +78,7 @@ int __wt_readunlock(WT_SESSION_IMPL* session, WT_RWLOCK* rwlock)
 
 	WT_RET(__wt_verbose(session, WT_VERB_MUTEX, "rwlock: read unlock %s", rwlock->name));
 
-	/*让正在等待的x-lock获得锁权，这里*/
+	/*让正在等待的x-lock获得锁权，这里有可能多个线程同时ADD,所以用原子操作*/
 	l = &rwlock->rwlock;
 	WT_ATOMIC_ADD2(l->s.writers, 1);
 }
@@ -132,6 +133,7 @@ int __wt_writeunlock(WT_SESSION_IMPL *session, WT_RWLOCK *rwlock)
 	l = &rwlock->rwlock;
 	copy = *l;
 
+	/*防止对copy赋值的优化，如果不加编译屏障，可能会直接用l来代替copy,这样贷不到后面原子性的更新*/
 	WT_BARRIER();
 
 	++copy.s.writers;
