@@ -76,14 +76,15 @@
   <ItemGroup>
     <ClInclude Include="error.h" />
     <ClInclude Include="extern.h" />
+    <ClInclude Include="flags.h" />
     <ClInclude Include="gcc.h" />
     <ClInclude Include="hardware.h" />
     <ClInclude Include="misc.h" />
     <ClInclude Include="mutex.h" />
     <ClInclude Include="posix.h" />
-    <ClInclude Include="posix\flags.h" />
     <ClInclude Include="queque.h" />
     <ClInclude Include="session.h" />
+    <ClInclude Include="stat.h" />
     <ClInclude Include="verify_build.h" />
     <ClInclude Include="wiredtiger.h" />
     <ClInclude Include="wiredtiger_config.h" />

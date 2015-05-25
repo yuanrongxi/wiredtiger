@@ -69,13 +69,16 @@
     <ClInclude Include="error.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="posix\flags.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="queque.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="session.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="flags.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="stat.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
