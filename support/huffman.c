@@ -287,6 +287,22 @@ recursive_free_node(WT_SESSION_IMPL *session, WT_FREQTREE_NODE *node)
 }
 
 /*
+ * __wt_huffman_close --
+ *	Discard a Huffman descriptor object.
+ */
+void
+__wt_huffman_close(WT_SESSION_IMPL *session, void *huffman_arg)
+{
+	WT_HUFFMAN_OBJ *huffman;
+
+	huffman = huffman_arg;
+
+	__wt_free(session, huffman->code2symbol);
+	__wt_free(session, huffman->codes);
+	__wt_free(session, huffman);
+}
+
+/*
  * __wt_huffman_open --
  *	Take a frequency table and return a pointer to a descriptor object.
  */
@@ -514,22 +530,6 @@ err:		if (ret == 0)
 	if (ret != 0)
 		__wt_huffman_close(session, huffman);
 	return (ret);
-}
-
-/*
- * __wt_huffman_close --
- *	Discard a Huffman descriptor object.
- */
-void
-__wt_huffman_close(WT_SESSION_IMPL *session, void *huffman_arg)
-{
-	WT_HUFFMAN_OBJ *huffman;
-
-	huffman = huffman_arg;
-
-	__wt_free(session, huffman->code2symbol);
-	__wt_free(session, huffman->codes);
-	__wt_free(session, huffman);
 }
 
 #if __HUFFMAN_DETAIL

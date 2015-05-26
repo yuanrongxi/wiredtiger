@@ -45,6 +45,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -74,6 +75,7 @@
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="connection.h" />
     <ClInclude Include="error.h" />
     <ClInclude Include="extern.h" />
     <ClInclude Include="flags.h" />
@@ -82,7 +84,7 @@
     <ClInclude Include="misc.h" />
     <ClInclude Include="mutex.h" />
     <ClInclude Include="posix.h" />
-    <ClInclude Include="queque.h" />
+    <ClInclude Include="queue.h" />
     <ClInclude Include="session.h" />
     <ClInclude Include="stat.h" />
     <ClInclude Include="verify_build.h" />
@@ -92,7 +94,11 @@
     <ClInclude Include="wt_internal.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="posix\os_alloc.c" />
+    <ClCompile Include="posix\os_errno.c" />
     <ClCompile Include="posix\os_mt_rw.c" />
+    <ClCompile Include="posix\os_sleep.c" />
+    <ClCompile Include="stat.c" />
     <ClCompile Include="support\cksum.c" />
     <ClCompile Include="support\hash_city.c" />
     <ClCompile Include="support\hash_fnv.c" />

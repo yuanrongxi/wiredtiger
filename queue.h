@@ -1,8 +1,8 @@
 #ifndef __DB_QUEUE_H_
 #define __DB_QUEUE_H_
 
-#ifndef defined(__cplusplus)
-extern "C"{
+#if defined(__cplusplus)
+extern "C" {
 #endif
 
 #undef LIST_EMPTY
@@ -415,7 +415,7 @@ struct {												\
 	QMD_TRACE_ELEM(&(elm)->field);							\
 } while (0)
 
-#ifndef defined(__cplusplus)
+#if defined(__cplusplus)
 };
 #endif
 

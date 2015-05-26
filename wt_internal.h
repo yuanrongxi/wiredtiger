@@ -236,7 +236,7 @@ typedef struct __wt_update WT_UPDATE;
 
 /*加入其他的.h文件*/
 
-//#include "stat.h"			
+#include "stat.h"			
 //#include "dhandle.h"			
 
 //#include "api.h"
@@ -250,8 +250,8 @@ typedef struct __wt_update WT_UPDATE;
 //#include "compact.h"
 //#include "cursor.h"
 //#include "dlh.h"
-//#include "error.h"
-//#include "flags.h"
+#include "error.h"
+#include "flags.h"
 //#include "log.h"
 //#include "lsm.h"
 //#include "meta.h"
@@ -260,9 +260,9 @@ typedef struct __wt_update WT_UPDATE;
 //#include "txn.h"
 
 #include "session.h"
-//#include "connection.h"
+#include "connection.h"
 
-//#include "extern.h"
+#include "extern.h"
 #include "verify_build.h"
 
 /*加入其他的.inl文件*/

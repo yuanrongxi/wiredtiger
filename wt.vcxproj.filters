@@ -19,7 +19,7 @@
     <Filter Include="c\posix">
       <UniqueIdentifier>{226ad2a8-c176-49a1-bc98-aeaa92462c83}</UniqueIdentifier>
     </Filter>
-    <Filter Include="c\supoprt">
+    <Filter Include="c\support">
       <UniqueIdentifier>{f48e9082-394b-4727-bec8-430350567145}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
@@ -69,9 +69,6 @@
     <ClInclude Include="error.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="queque.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="session.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -79,6 +76,12 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="stat.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="queue.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="connection.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
@@ -90,25 +93,37 @@
       <Filter>c\posix</Filter>
     </ClCompile>
     <ClCompile Include="support\cksum.c">
-      <Filter>c\supoprt</Filter>
+      <Filter>c\support</Filter>
     </ClCompile>
     <ClCompile Include="support\rand.c">
-      <Filter>c\supoprt</Filter>
+      <Filter>c\support</Filter>
     </ClCompile>
     <ClCompile Include="support\hash_fnv.c">
-      <Filter>c\supoprt</Filter>
+      <Filter>c\support</Filter>
     </ClCompile>
     <ClCompile Include="support\pow.c">
-      <Filter>c\supoprt</Filter>
+      <Filter>c\support</Filter>
     </ClCompile>
     <ClCompile Include="support\huffman.c">
-      <Filter>c\supoprt</Filter>
+      <Filter>c\support</Filter>
     </ClCompile>
     <ClCompile Include="support\hash_city.c">
-      <Filter>c\supoprt</Filter>
+      <Filter>c\support</Filter>
     </ClCompile>
     <ClCompile Include="support\hex.c">
-      <Filter>c\supoprt</Filter>
+      <Filter>c\support</Filter>
+    </ClCompile>
+    <ClCompile Include="stat.c">
+      <Filter>c\support</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_sleep.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_errno.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_alloc.c">
+      <Filter>c\posix</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

@@ -148,6 +148,62 @@ void test_wt_align()
 	printf("%d\n", WT_ALIGN(n, v));
 }
 
+static uint32_t rw_count = 0;
+WT_RWLOCK	rwlock;
+
+static void* r_fun(void* arg)
+{
+	int i = 0;
+	uint32_t count = 0;
+	while(i ++ < 10000){
+		__wt_readlock(NULL, &rwlock);
+		count = rw_count;
+		__wt_readunlock(NULL, &rwlock);
+	}
+
+	return NULL;
+}
+
+static void* w_fun(void* arg)
+{
+	int i = 0;
+	uint32_t count = 0;
+
+	while(i ++ < 1000){
+		__wt_writelock(NULL, &rwlock);
+		rw_count ++;
+		__wt_writeunlock(NULL, &rwlock);
+	}
+
+	return NULL;
+}
+
+void test_rw_lock()
+{
+	int i;
+	pthread_t rid[10];
+	pthread_t wid[10];
+	
+	rwlock.rwlock.u = 0;
+	rwlock.name = "test rw lock";
+
+	for(i = 0; i < 2; i++){
+		pthread_create(&rid[i], NULL, r_fun, NULL);
+	}
+
+	for(i = 0; i < 2; i++){
+		pthread_create(&wid[i], NULL, w_fun, NULL);
+	}
+
+	for(i = 0; i < 2; i++)
+		pthread_join(rid[i], NULL);
+
+	for(i = 0; i < 2; i++)
+		pthread_join(wid[i], NULL);
+
+	printf("rw_count = %d\n", rw_count);
+}
+
 int main()
 {
 	//test_atomic();
@@ -155,6 +211,6 @@ int main()
 	//test_cas_lock();
 	//test_wt_align();
 
-	test_rwlock_struct();
+	//test_rwlock_struct();
 }
 

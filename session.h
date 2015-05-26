@@ -65,8 +65,8 @@ struct WT_COMPILER_TYPE_ALIGN(WT_CACHE_LINE_ALIGNMENT) __wt_session_impl
 
 	WT_ITEM					err;
 
-	WT_TXN_ISOLATION		isolation;
-	WT_TXN					txn;
+	//TODO:WT_TXN_ISOLATION		isolation;
+	//WT_TXN					txn;
 
 	u_int					ncursors;
 

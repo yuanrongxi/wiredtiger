@@ -7,6 +7,7 @@
 *如果readers != users, writes != users,表示有线程正在waiting lock,另外一个线程正在占用x-lock
 *所有这些值的改变采用CAS操作，设计上很取巧
 *****************************************************************/
+#include "wt_internal.h"
 
 int __wt_rwlock_alloc(WT_SESSION_IMPL* session, WT_RWLOCK** rwlockp, const char* name)
 {
