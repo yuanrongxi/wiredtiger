@@ -84,6 +84,12 @@
     <ClInclude Include="connection.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="posix\os.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="dlh.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="test\base_test.c">
@@ -123,6 +129,66 @@
       <Filter>c\posix</Filter>
     </ClCompile>
     <ClCompile Include="posix\os_alloc.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_stdio.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_path.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_exist.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_remove.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_rename.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_filesize.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_getenv.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_abort.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_yield.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_time.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_thread.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_strtouq.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_priv.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_mtx_cond.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_getline.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_ftruncate.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_fsync.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_flock.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_dlopen.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_dir.c">
       <Filter>c\posix</Filter>
     </ClCompile>
   </ItemGroup>

@@ -255,7 +255,7 @@ typedef struct __wt_update WT_UPDATE;
 //#include "log.h"
 //#include "lsm.h"
 //#include "meta.h"
-//#include "os.h"
+#include "os.h"
 //#include "schema.h"
 //#include "txn.h"
 

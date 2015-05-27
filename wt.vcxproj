@@ -76,6 +76,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="connection.h" />
+    <ClInclude Include="dlh.h" />
     <ClInclude Include="error.h" />
     <ClInclude Include="extern.h" />
     <ClInclude Include="flags.h" />
@@ -84,6 +85,7 @@
     <ClInclude Include="misc.h" />
     <ClInclude Include="mutex.h" />
     <ClInclude Include="posix.h" />
+    <ClInclude Include="posix\os.h" />
     <ClInclude Include="queue.h" />
     <ClInclude Include="session.h" />
     <ClInclude Include="stat.h" />
@@ -94,10 +96,30 @@
     <ClInclude Include="wt_internal.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="posix\os_abort.c" />
     <ClCompile Include="posix\os_alloc.c" />
+    <ClCompile Include="posix\os_dir.c" />
+    <ClCompile Include="posix\os_dlopen.c" />
     <ClCompile Include="posix\os_errno.c" />
+    <ClCompile Include="posix\os_exist.c" />
+    <ClCompile Include="posix\os_filesize.c" />
+    <ClCompile Include="posix\os_flock.c" />
+    <ClCompile Include="posix\os_fsync.c" />
+    <ClCompile Include="posix\os_ftruncate.c" />
+    <ClCompile Include="posix\os_getenv.c" />
+    <ClCompile Include="posix\os_getline.c" />
+    <ClCompile Include="posix\os_mtx_cond.c" />
     <ClCompile Include="posix\os_mt_rw.c" />
+    <ClCompile Include="posix\os_path.c" />
+    <ClCompile Include="posix\os_priv.c" />
+    <ClCompile Include="posix\os_remove.c" />
+    <ClCompile Include="posix\os_rename.c" />
     <ClCompile Include="posix\os_sleep.c" />
+    <ClCompile Include="posix\os_stdio.c" />
+    <ClCompile Include="posix\os_strtouq.c" />
+    <ClCompile Include="posix\os_thread.c" />
+    <ClCompile Include="posix\os_time.c" />
+    <ClCompile Include="posix\os_yield.c" />
     <ClCompile Include="stat.c" />
     <ClCompile Include="support\cksum.c" />
     <ClCompile Include="support\hash_city.c" />

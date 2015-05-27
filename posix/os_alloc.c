@@ -149,7 +149,7 @@ int __wt_strdup(WT_SESSION_IMPL *session, const char *str, void *retp)
 
 void __wt_free_int(WT_SESSION_IMPL *session, const void *p_arg)
 {
-	void* p = *p_arg;
+	void* p = *(void **)p_arg;
 	if(p == NULL)
 		return ;
 
