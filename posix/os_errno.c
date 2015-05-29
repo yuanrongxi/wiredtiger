@@ -47,14 +47,15 @@ const char* __wt_wiredtiger_error(int error)
 
 const char* __wt_strerror(WT_SESSION_IMPL *session, int error, char *errbuf, size_t errlen)
 {
-	const char* p;
+	const char* p = __wt_wiredtiger_error(error);
 
-	if(p = __wt_wiredtiger_error(error) != NULL)
+	if(p != NULL)
 		return p;
 
 	if (session == NULL && snprintf(errbuf, errlen, "error return: %d", error) > 0)
 		return (errbuf);
-	if (session != NULL && __wt_buf_fmt(session, &session->err, "error return: %d", error) == 0)
+	
+	if (session != NULL /*&& __wt_buf_fmt(session, &session->err, "error return: %d", error) == 0*/) /*TODO:*/
 		return (session->err.data);
 
 	return ("Unable to return error string");

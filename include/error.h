@@ -17,7 +17,7 @@
 /*错误信息输出，会先执行v函数，然后将执行结果输出到错误信息中*/
 #define WT_ERR_MSG(session, v, ...)	do{					\
 	ret = (v);											\
-	_wt_err(session, ret, __VA_ARGS__);					\
+	__wt_err(session, ret, __VA_ARGS__);				\
 	goto err;											\
 }while(0)
 
@@ -45,11 +45,10 @@
 	return __ret;										\
 } while (0)
 
-/*执行a,如果a执行为true,返回v值*/
 #define	WT_RET_TEST(a, v) do {							\
 	if (a)												\
-	return (v);											\					
-}while(0)
+	return (v);											\
+} while (0)
 
 /*执行a，返回值为EBUSY,继续向下执行*/
 #define WT_RET_BUSY_OK(a) do {							\

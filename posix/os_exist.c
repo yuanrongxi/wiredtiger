@@ -9,10 +9,11 @@ int __wt_exist(WT_SESSION_IMPL* session, const char* filename, int* existp)
 
 	WT_DECL_RET;
 	*existp = 0;
-
+	
+	WT_RET(__wt_filename(session, filename, &path));
 	WT_SYSCALL_RETRY(stat(path, &sb), ret);
 
-	__wt_free(sesion, path);
+	__wt_free(session, path);
 
 	if(ret == 0){
 		*existp = 1;

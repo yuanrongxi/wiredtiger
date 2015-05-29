@@ -42,7 +42,7 @@ int __wt_raw_to_esc_hex(WT_SESSION_IMPL *session, const uint8_t *from, size_t si
 
 	WT_RET(__wt_buf_init(session, to, size * 3 + 1));
 
-	for(p = from, to = to->mem, i = size; i > 0; --i, ++p){
+	for(p = from, t = to->mem, i = size; i > 0; --i, ++p){
 		if (isprint((int)*p)) {
 			if (*p == '\\')
 				*t++ = '\\';

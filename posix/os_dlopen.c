@@ -6,8 +6,9 @@ int __wt_dlopen(WT_SESSION_IMPL *session, const char *path, WT_DLH **dlhp)
 	WT_DECL_RET;
 	WT_DLH *dlh;
 
-	WT_RET(__wt_calloc_one(session, &dlh));
-	WT_ERR(__wt_strdup(session, path, &dlh->name));
+	//WT_RET(__wt_calloc(session, (size_t)1, sizeof(WT_DLH), (void*)(&dlh)));
+	WT_RET(__wt_calloc_one(session, (&dlh)));
+	WT_ERR(__wt_strdup(session, path, &(dlh->name)));
 
 	if ((dlh->handle = dlopen(path, RTLD_LAZY)) == NULL)
 		WT_ERR_MSG(session, __wt_errno(), "dlopen(%s): %s", path, dlerror());

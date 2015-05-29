@@ -447,7 +447,7 @@ extern int __wt_dlclose(WT_SESSION_IMPL *session, WT_DLH *dlh);
 extern int __wt_errno(void);
 extern const char *__wt_strerror(WT_SESSION_IMPL *session, int error, char *errbuf, size_t errlen);
 extern int __wt_exist(WT_SESSION_IMPL *session, const char *filename, int *existp);
-extern void __wt_fallocate_config(WT_SESSION_IMPL *session, WT_FH *fh);
+extern void __wt_fallocate_config(WT_SESSION_IMPL *session, WT_FH *fh);	
 extern int __wt_fallocate( WT_SESSION_IMPL *session, WT_FH *fh, wt_off_t offset, wt_off_t len);
 extern int __wt_filesize(WT_SESSION_IMPL *session, WT_FH *fh, wt_off_t *sizep);
 extern int __wt_filesize_name( WT_SESSION_IMPL *session, const char *filename, wt_off_t *sizep);

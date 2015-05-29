@@ -70,30 +70,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="misc.inl" />
-    <None Include="mutex.inl" />
+    <None Include="cmake\base_test\CMakeLists.txt" />
+    <None Include="cmake\CMakeLists.txt" />
+    <None Include="cmake\wt\CMakeLists.txt" />
+    <None Include="include\buf.inl" />
+    <None Include="include\misc.inl" />
+    <None Include="include\mutex.inl" />
     <None Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="connection.h" />
-    <ClInclude Include="dlh.h" />
-    <ClInclude Include="error.h" />
-    <ClInclude Include="extern.h" />
-    <ClInclude Include="flags.h" />
-    <ClInclude Include="gcc.h" />
-    <ClInclude Include="hardware.h" />
-    <ClInclude Include="misc.h" />
-    <ClInclude Include="mutex.h" />
-    <ClInclude Include="posix.h" />
-    <ClInclude Include="posix\os.h" />
-    <ClInclude Include="queue.h" />
-    <ClInclude Include="session.h" />
-    <ClInclude Include="stat.h" />
-    <ClInclude Include="verify_build.h" />
-    <ClInclude Include="wiredtiger.h" />
-    <ClInclude Include="wiredtiger_config.h" />
-    <ClInclude Include="wiredtiger_ext.h" />
-    <ClInclude Include="wt_internal.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="posix\os_abort.c" />
@@ -110,6 +93,7 @@
     <ClCompile Include="posix\os_getline.c" />
     <ClCompile Include="posix\os_mtx_cond.c" />
     <ClCompile Include="posix\os_mt_rw.c" />
+    <ClCompile Include="posix\os_open.c" />
     <ClCompile Include="posix\os_path.c" />
     <ClCompile Include="posix\os_priv.c" />
     <ClCompile Include="posix\os_remove.c" />
@@ -122,13 +106,38 @@
     <ClCompile Include="posix\os_yield.c" />
     <ClCompile Include="stat.c" />
     <ClCompile Include="support\cksum.c" />
+    <ClCompile Include="support\err.c" />
+    <ClCompile Include="support\filename.c" />
     <ClCompile Include="support\hash_city.c" />
     <ClCompile Include="support\hash_fnv.c" />
     <ClCompile Include="support\hex.c" />
     <ClCompile Include="support\huffman.c" />
     <ClCompile Include="support\pow.c" />
     <ClCompile Include="support\rand.c" />
+    <ClCompile Include="support\scratch.c" />
     <ClCompile Include="test\base_test.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\connection.h" />
+    <ClInclude Include="include\dhandle.h" />
+    <ClInclude Include="include\dlh.h" />
+    <ClInclude Include="include\error.h" />
+    <ClInclude Include="include\extern.h" />
+    <ClInclude Include="include\flags.h" />
+    <ClInclude Include="include\gcc.h" />
+    <ClInclude Include="include\hardware.h" />
+    <ClInclude Include="include\misc.h" />
+    <ClInclude Include="include\mutex.h" />
+    <ClInclude Include="include\os.h" />
+    <ClInclude Include="include\posix.h" />
+    <ClInclude Include="include\queue.h" />
+    <ClInclude Include="include\session.h" />
+    <ClInclude Include="include\stat.h" />
+    <ClInclude Include="include\verify_build.h" />
+    <ClInclude Include="include\wiredtiger.h" />
+    <ClInclude Include="include\wiredtiger_config.h" />
+    <ClInclude Include="include\wiredtiger_ext.h" />
+    <ClInclude Include="include\wt_internal.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

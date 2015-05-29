@@ -25,8 +25,8 @@ struct __wt_hazard
 #define	S2BT(session)	   ((WT_BTREE *)(session)->dhandle->handle)
 #define	S2BT_SAFE(session) ((session)->dhandle == NULL ? NULL : S2BT(session))
 
-/*定义session结构*/
-struct WT_COMPILER_TYPE_ALIGN(WT_CACHE_LINE_ALIGNMENT) __wt_session_impl
+/*定义session结构, WT_COMPILER_TYPE_ALIGN(WT_CACHE_LINE_ALIGNMENT)*/
+struct __wt_session_impl
 {
 	WT_SESSION				iface;
 	void*					lang_private;

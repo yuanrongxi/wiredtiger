@@ -61,7 +61,7 @@ typedef enum
 	(t1).tv_nsec == (t2).tv_nsec ? 0 : 1 : 1)
 
 
-enum __wt_file_extend
+enum
 {
 	WT_FALLOCATE_AVAILABLE,
 	WT_FALLOCATE_NOT_AVAILABLE,
@@ -72,21 +72,21 @@ enum __wt_file_extend
 
 struct __wt_fh
 {
-	char*			name;
-	uint64_t		name_hash;
+	char*			name;							/*文件名，带path*/
+	uint64_t		name_hash;						/*文件名hash值*/
 	SLIST_ENTRY(__wt_fh) l;
 	SLIST_ENTRY(__wt_fh) hashl;
 
-	u_int			ref;
+	u_int			ref;							/*引用计数*/
 
-	wt_off_t		size;	
+	wt_off_t		size;							/*文件大小*/
 	wt_off_t		extend_size;
 	wt_off_t		extend_len;
 
-	int				fd;
+	int				fd;								/*文件打开的描述符句柄*/
 
-	int				diect_io;
-	__wt_file_extend fallocate_available;
+	int				direct_io;						/*是否启用direct IO操作*/
+	int				fallocate_available;
 	int				fallocate_requires_locking;
 };
 

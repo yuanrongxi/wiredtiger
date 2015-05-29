@@ -25,7 +25,7 @@ int __wt_directory_sync_fh(WT_SESSION_IMPL *session, WT_FH *fh)
 }
 
 /*对目录索引文件进行sync*/
-int __wt_directory_sync_fh(WT_SESSION_IMPL *session, WT_FH *fh)
+int __wt_directory_sync(WT_SESSION_IMPL *session, char *path)
 {
 	WT_DECL_RET;
 	int fd, tret;
@@ -56,8 +56,10 @@ int __wt_directory_sync_fh(WT_SESSION_IMPL *session, WT_FH *fh)
 
 err:	
 	WT_SYSCALL_RETRY(close(fd), tret);
+	/*
 	if (tret != 0)
 		__wt_err(session, tret, "%s: close", path);
+		*/
 	/*过滤数据库的特定错误*/
 	WT_TRET(tret);
 
@@ -83,7 +85,7 @@ int __wt_fsync_async(WT_SESSION_IMPL *session, WT_FH *fh)
 	WT_RET(__wt_verbose(
 		session, WT_VERB_FILEOPS, "%s: sync_file_range", fh->name));
 
-	WT_SYSCALL_RETRY(sync_file_range(fh->fd, (off64_t)0, (off64_t)0, SYNC_FILE_RANGE_WRITE), ret);
+	WT_SYSCALL_RETRY(sync_file_range(fh->fd, 0, 0, SYNC_FILE_RANGE_WRITE), ret);
 	if (ret == 0)
 		return 0;
 

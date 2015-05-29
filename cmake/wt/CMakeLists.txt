@@ -6,7 +6,7 @@ PROJECT(wt)
 
 # includes
 SET(includes
-    "../../"
+    "../../include"
     )
 INCLUDE_DIRECTORIES(${includes})
 

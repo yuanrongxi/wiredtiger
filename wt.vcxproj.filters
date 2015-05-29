@@ -22,74 +22,36 @@
     <Filter Include="c\support">
       <UniqueIdentifier>{f48e9082-394b-4727-bec8-430350567145}</UniqueIdentifier>
     </Filter>
+    <Filter Include="cmake">
+      <UniqueIdentifier>{5ad3c355-1d5e-40b9-b969-109798413b6e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="cmake\base_test">
+      <UniqueIdentifier>{1034317f-a317-47a3-87b6-6a49f41ee1f3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="cmake\wt">
+      <UniqueIdentifier>{b4cc9aa2-66eb-4cde-abbe-38b43e040c5c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
-    <None Include="mutex.inl">
+    <None Include="cmake\CMakeLists.txt">
+      <Filter>cmake</Filter>
+    </None>
+    <None Include="cmake\base_test\CMakeLists.txt">
+      <Filter>cmake\base_test</Filter>
+    </None>
+    <None Include="cmake\wt\CMakeLists.txt">
+      <Filter>cmake\wt</Filter>
+    </None>
+    <None Include="include\mutex.inl">
       <Filter>inl</Filter>
     </None>
-    <None Include="misc.inl">
+    <None Include="include\misc.inl">
       <Filter>inl</Filter>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="wiredtiger_config.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="wiredtiger.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="gcc.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="verify_build.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="hardware.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="misc.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="wt_internal.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="wiredtiger_ext.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="extern.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="posix.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="mutex.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="error.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="session.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="flags.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="stat.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="queue.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="connection.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="posix\os.h">
-      <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="dlh.h">
-      <Filter>include</Filter>
-    </ClInclude>
+    <None Include="include\buf.inl">
+      <Filter>inl</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="test\base_test.c">
@@ -191,5 +153,79 @@
     <ClCompile Include="posix\os_dir.c">
       <Filter>c\posix</Filter>
     </ClCompile>
+    <ClCompile Include="support\err.c">
+      <Filter>c\support</Filter>
+    </ClCompile>
+    <ClCompile Include="support\filename.c">
+      <Filter>c\support</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_open.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="support\scratch.c">
+      <Filter>c\support</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\connection.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dhandle.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dlh.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\error.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\extern.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\flags.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\gcc.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\hardware.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\misc.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\mutex.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\os.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\posix.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\queue.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\session.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\stat.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\verify_build.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\wiredtiger.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\wiredtiger_config.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\wiredtiger_ext.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\wt_internal.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

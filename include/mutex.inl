@@ -29,10 +29,6 @@ static inline void __wt_spin_destroy(WT_SESSION_IMPL* session, WT_SPINLOCK* t)
 	*(t) = 0;
 }
 
-#ifndef __wt_yield
-#define __wt_yield sched_yield
-#endif
-
 static inline void __wt_spin_lock(WT_SESSION_IMPL* session, WT_SPINLOCK* t)
 {
 	int i;
