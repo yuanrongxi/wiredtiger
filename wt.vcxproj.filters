@@ -165,6 +165,18 @@
     <ClCompile Include="support\scratch.c">
       <Filter>c\support</Filter>
     </ClCompile>
+    <ClCompile Include="posix\os_map.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_getopt.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="posix\os_fallocate.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="..\posix\os_rw.c">
+      <Filter>c\posix</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

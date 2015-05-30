@@ -79,18 +79,22 @@
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\posix\os_rw.c" />
     <ClCompile Include="posix\os_abort.c" />
     <ClCompile Include="posix\os_alloc.c" />
     <ClCompile Include="posix\os_dir.c" />
     <ClCompile Include="posix\os_dlopen.c" />
     <ClCompile Include="posix\os_errno.c" />
     <ClCompile Include="posix\os_exist.c" />
+    <ClCompile Include="posix\os_fallocate.c" />
     <ClCompile Include="posix\os_filesize.c" />
     <ClCompile Include="posix\os_flock.c" />
     <ClCompile Include="posix\os_fsync.c" />
     <ClCompile Include="posix\os_ftruncate.c" />
     <ClCompile Include="posix\os_getenv.c" />
     <ClCompile Include="posix\os_getline.c" />
+    <ClCompile Include="posix\os_getopt.c" />
+    <ClCompile Include="posix\os_map.c" />
     <ClCompile Include="posix\os_mtx_cond.c" />
     <ClCompile Include="posix\os_mt_rw.c" />
     <ClCompile Include="posix\os_open.c" />
