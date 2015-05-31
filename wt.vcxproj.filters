@@ -239,5 +239,8 @@
     <ClInclude Include="include\wt_internal.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="log.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

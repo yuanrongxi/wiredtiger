@@ -252,7 +252,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "dlh.h"
 #include "error.h"
 #include "flags.h"
-//#include "log.h"
+#include "log.h"
 //#include "lsm.h"
 //#include "meta.h"
 #include "os.h"

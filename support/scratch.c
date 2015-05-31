@@ -95,6 +95,7 @@ int __wt_buf_catfmt(WT_SESSION_IMPL *session, WT_ITEM *buf, const char *fmt, ...
 	}
 }
 
+/*从session->scratch中分配得到一个WT_ITEM缓冲区,如果scratch没有空闲的WT_ITEM,会用alloc中分配一个*/
 int __wt_scr_alloc_func(WT_SESSION_IMPL *session, size_t size, WT_ITEM **scratchp)
 {
 	WT_DECL_RET;

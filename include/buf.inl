@@ -59,6 +59,7 @@ static inline void __wt_buf_free(WT_SESSION_IMPL *session, WT_ITEM *buf)
 	memset(buf, 0, sizeof(WT_ITEM));
 }
 
+/*scratch方式回收WT_ITEM缓冲区*/
 static inline void __wt_scr_free(WT_SESSION_IMPL *session, WT_ITEM **bufp)
 {
 	WT_ITEM *buf;

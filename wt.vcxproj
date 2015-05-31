@@ -142,6 +142,7 @@
     <ClInclude Include="include\wiredtiger_config.h" />
     <ClInclude Include="include\wiredtiger_ext.h" />
     <ClInclude Include="include\wt_internal.h" />
+    <ClInclude Include="log.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
