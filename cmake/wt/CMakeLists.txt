@@ -13,6 +13,7 @@ INCLUDE_DIRECTORIES(${includes})
 # sources
 FILE(GLOB sources_c "../../posix/*.c")
 FILE(GLOB support_c "../../support/*.c")
+FILE(GLOB cursor_c "../../cursor/*.c")
 
 # targets
-ADD_LIBRARY (wt STATIC ${sources_c} ${support_c})
+ADD_LIBRARY (wt STATIC ${sources_c} ${support_c} ${cursor_c})

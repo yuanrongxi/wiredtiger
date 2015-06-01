@@ -31,6 +31,9 @@
     <Filter Include="cmake\wt">
       <UniqueIdentifier>{b4cc9aa2-66eb-4cde-abbe-38b43e040c5c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\cursor">
+      <UniqueIdentifier>{7a9ee7ff-369b-4050-a2a5-7759d4813c64}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -50,6 +53,12 @@
       <Filter>inl</Filter>
     </None>
     <None Include="include\buf.inl">
+      <Filter>inl</Filter>
+    </None>
+    <None Include="include\packing.inl">
+      <Filter>inl</Filter>
+    </None>
+    <None Include="include\intpack.inl">
       <Filter>inl</Filter>
     </None>
   </ItemGroup>
@@ -174,8 +183,14 @@
     <ClCompile Include="posix\os_fallocate.c">
       <Filter>c\posix</Filter>
     </ClCompile>
-    <ClCompile Include="..\posix\os_rw.c">
+    <ClCompile Include="posix\os_rw.c">
       <Filter>c\posix</Filter>
+    </ClCompile>
+    <ClCompile Include="cursor\cur_json.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
+    <ClCompile Include="include\pack_test.c">
+      <Filter>test</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -239,7 +254,13 @@
     <ClInclude Include="include\wt_internal.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="log.h">
+    <ClInclude Include="include\log.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\config.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\cursor.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

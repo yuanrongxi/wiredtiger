@@ -304,6 +304,50 @@ void test_random()
 	}
 }
 
+int b_x = 0, b_y = 1;
+int x_b, y_b;
+
+static void* barrier_fun2(void* arg)
+{
+	int i;
+	for(i = 0; i < 1000; i ++){
+		WT_WRITE_BARRIER();
+		b_y = 3;
+		x_b = b_x;
+		WT_FULL_BARRIER();
+		b_y = 1;
+	}
+}
+
+static void* barrier_fun1(void* arg)
+{
+	int i = 0;
+	pthread_t id2;
+	__wt_thread_create(session, &id2, barrier_fun2, NULL);
+
+	for(i = 0; i < 1000; i ++){
+		WT_WRITE_BARRIER();
+		b_x = 2;
+		y_b = b_y;
+		WT_FULL_BARRIER();
+		b_x = 0;
+	}
+
+	__wt_thread_join(session, id2);
+}
+
+void test_barrier()
+{
+	pthread_t id1;
+
+	__wt_thread_create(session, &id1, barrier_fun1, NULL);
+
+	__wt_thread_join(session, id1);
+
+	printf("x_b = %d, y_b = %d\n", x_b, y_b);
+}
+
+
 void open_wt_session()
 {
 	WT_EVENT_HANDLER* handler = NULL;
@@ -334,13 +378,14 @@ int main()
 	//test_wt_align();
 	//test_rwlock_struct();
 	//test_rw_lock();
+	test_barrier();
 
 	//test_err_info();
 	//test_checksum();
 	//test_list();
 	//test_filename();
 	//test_random();
-	test_hex();
+	//test_hex();
 
 	close_wt_session();
 }

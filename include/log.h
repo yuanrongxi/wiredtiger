@@ -91,7 +91,7 @@
 
 #define	WT_LOG_RECORD_COMPRESSED	0x01	/* Compressed except hdr */
 
-typedef WT_COMPILER_TYPE_ALIGN(WT_CACHE_LINE_ALIGNMENT) struct 
+typedef /*WT_COMPILER_TYPE_ALIGN(WT_CACHE_LINE_ALIGNMENT)*/ struct 
 {
 	int64_t				slot_state;					/*slot״̬*/
 	uint64_t			slot_group_size;			/*slot group size*/

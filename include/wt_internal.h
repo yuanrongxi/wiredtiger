@@ -246,9 +246,9 @@ typedef struct __wt_update WT_UPDATE;
 //#include "btmem.h"
 //#include "btree.h"
 //#include "cache.h"
-//#include "config.h"
+#include "config.h"
 //#include "compact.h"
-//#include "cursor.h"
+#include "cursor.h"
 #include "dlh.h"
 #include "error.h"
 #include "flags.h"
@@ -268,8 +268,8 @@ typedef struct __wt_update WT_UPDATE;
 /*加入其他的.inl文件*/
 #include "buf.inl"
 #include "misc.inl"
-//#include "intpack.i"			
-//#include "packing.i"
+#include "intpack.inl"			
+#include "packing.inl"
 //#include "cache.i"			
 //#include "cell.i"			
 

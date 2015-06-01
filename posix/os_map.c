@@ -13,7 +13,7 @@ int __wt_mmap(WT_SESSION_IMPL* session, WT_FH* fh, void* mapp, size_t* lenp, voi
 
 	orig_size = (size_t)fh->size;
 
-	map = mmap(NULL, orig_size, MAP_PRIVATE, fh->fd, (wt_off_t)0);
+	map = mmap(NULL, PROT_READ, orig_size, MAP_PRIVATE, fh->fd, (wt_off_t)0);
 	if(map == MAP_FAILED){
 		WT_RET_MSG(session, __wt_errno(), "%s map error: failed to map %" WT_SIZET_FMT " bytes", fh->name, orig_size);
 	}
@@ -32,29 +32,30 @@ int __wt_mmap(WT_SESSION_IMPL* session, WT_FH* fh, void* mapp, size_t* lenp, voi
 /*清空BTREE上mmap文件缓冲,从p地址开始，清空size长度的数据,为了顺序读*/
 int __wt_mmap_preload(WT_SESSION_IMPL *session, const void *p, size_t size)
 {
-	WT_BM *bm = S2BT(session)->bm;
-	WT_DECL_RET;
+/*TODO:*/
+	//WT_BM *bm = S2BT(session)->bm;
+	//WT_DECL_RET;
 
 	/**4KB对齐寻址,向前对齐，例如p = 4097,那么blk = 4096, size = size + 1*/
-	void *blk = (void *)((uintptr_t)p & ~(uintptr_t)(WT_VM_PAGESIZE - 1));
-	size += WT_PTRDIFF(p, blk);
+	//void *blk = (void *)((uintptr_t)p & ~(uintptr_t)(WT_VM_PAGESIZE - 1));
+	//size += WT_PTRDIFF(p, blk);
 
 	/* XXX proxy for "am I doing a scan?" -- manual read-ahead,,必须2M为单位的清除文件缓存,因为预读是2M为单位*/
-	if (F_ISSET(session, WT_SESSION_NO_CACHE)) {
+	//if (F_ISSET(session, WT_SESSION_NO_CACHE)) {
 		/* Read in 2MB blocks every 1MB of data. */
-		if (((uintptr_t)((uint8_t *)blk + size) & (uintptr_t)((1<<20) - 1)) < (uintptr_t)blk)
-			return 0;
+	//	if (((uintptr_t)((uint8_t *)blk + size) & (uintptr_t)((1<<20) - 1)) < (uintptr_t)blk)
+	//		return 0;
 
 		/*从新确定SIZE,最小清除空间2M*/
-		size = WT_MIN(WT_MAX(20 * size, 2 << 20), WT_PTRDIFF((uint8_t *)bm->map + bm->maplen, blk));
-	}
+	//	size = WT_MIN(WT_MAX(20 * size, 2 << 20), WT_PTRDIFF((uint8_t *)bm->map + bm->maplen, blk));
+	//}
 
 	/*4KB对齐*/
-	size &= ~(size_t)(WT_VM_PAGESIZE - 1);
+	//size &= ~(size_t)(WT_VM_PAGESIZE - 1);
 
 	/*文件缓冲清空*/
-	if (size > WT_VM_PAGESIZE && (ret = posix_madvise(blk, size, POSIX_MADV_WILLNEED)) != 0)
-		WT_RET_MSG(session, ret, "posix_madvise will need");
+	//if (size > WT_VM_PAGESIZE && (ret = posix_madvise(blk, size, POSIX_MADV_WILLNEED)) != 0)
+	//	WT_RET_MSG(session, ret, "posix_madvise will need");
 
 	return 0;
 }

@@ -74,12 +74,15 @@
     <None Include="cmake\CMakeLists.txt" />
     <None Include="cmake\wt\CMakeLists.txt" />
     <None Include="include\buf.inl" />
+    <None Include="include\intpack.inl" />
     <None Include="include\misc.inl" />
     <None Include="include\mutex.inl" />
+    <None Include="include\packing.inl" />
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\posix\os_rw.c" />
+    <ClCompile Include="cursor\cur_json.c" />
+    <ClCompile Include="include\pack_test.c" />
     <ClCompile Include="posix\os_abort.c" />
     <ClCompile Include="posix\os_alloc.c" />
     <ClCompile Include="posix\os_dir.c" />
@@ -102,6 +105,7 @@
     <ClCompile Include="posix\os_priv.c" />
     <ClCompile Include="posix\os_remove.c" />
     <ClCompile Include="posix\os_rename.c" />
+    <ClCompile Include="posix\os_rw.c" />
     <ClCompile Include="posix\os_sleep.c" />
     <ClCompile Include="posix\os_stdio.c" />
     <ClCompile Include="posix\os_strtouq.c" />
@@ -122,7 +126,9 @@
     <ClCompile Include="test\base_test.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\config.h" />
     <ClInclude Include="include\connection.h" />
+    <ClInclude Include="include\cursor.h" />
     <ClInclude Include="include\dhandle.h" />
     <ClInclude Include="include\dlh.h" />
     <ClInclude Include="include\error.h" />
@@ -130,6 +136,7 @@
     <ClInclude Include="include\flags.h" />
     <ClInclude Include="include\gcc.h" />
     <ClInclude Include="include\hardware.h" />
+    <ClInclude Include="include\log.h" />
     <ClInclude Include="include\misc.h" />
     <ClInclude Include="include\mutex.h" />
     <ClInclude Include="include\os.h" />
@@ -142,7 +149,6 @@
     <ClInclude Include="include\wiredtiger_config.h" />
     <ClInclude Include="include\wiredtiger_ext.h" />
     <ClInclude Include="include\wt_internal.h" />
-    <ClInclude Include="log.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
