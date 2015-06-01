@@ -35,7 +35,7 @@ void test_pack()
 
 int main()
 {
-
+	test_pack();
 }
 
 
