@@ -82,7 +82,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cursor\cur_json.c" />
-    <ClCompile Include="include\pack_test.c" />
     <ClCompile Include="posix\os_abort.c" />
     <ClCompile Include="posix\os_alloc.c" />
     <ClCompile Include="posix\os_dir.c" />
@@ -124,6 +123,7 @@
     <ClCompile Include="support\rand.c" />
     <ClCompile Include="support\scratch.c" />
     <ClCompile Include="test\base_test.c" />
+    <ClCompile Include="test\pack_test.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\config.h" />

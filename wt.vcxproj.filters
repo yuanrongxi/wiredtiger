@@ -189,7 +189,7 @@
     <ClCompile Include="cursor\cur_json.c">
       <Filter>c\cursor</Filter>
     </ClCompile>
-    <ClCompile Include="include\pack_test.c">
+    <ClCompile Include="test\pack_test.c">
       <Filter>test</Filter>
     </ClCompile>
   </ItemGroup>
