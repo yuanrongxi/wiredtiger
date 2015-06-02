@@ -37,6 +37,9 @@
     <Filter Include="c\packing">
       <UniqueIdentifier>{7eb87fe4-6137-4a8f-9fdf-6b3fe2fa629d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\log">
+      <UniqueIdentifier>{b554346b-6c52-4e96-820e-50f56c3b56a1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -203,6 +206,9 @@
     </ClCompile>
     <ClCompile Include="packing\pack_stream.c">
       <Filter>c\packing</Filter>
+    </ClCompile>
+    <ClCompile Include="log\log_auto.c">
+      <Filter>c\log</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

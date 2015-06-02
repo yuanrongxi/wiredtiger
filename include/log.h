@@ -170,7 +170,7 @@ typedef struct
 	uint8_t				unused[2];
 	uint32_t			mem_len;
 	uint8_t				record[0];
-} WT_RECORD_LOG;
+} WT_LOG_RECORD;
 
 #define	WT_LOG_MAGIC			0x101064
 #define	WT_LOG_MAJOR_VERSION	1
@@ -178,7 +178,7 @@ typedef struct
 
 struct __wt_log_desc
 {
-	uint32_t			log_magic;
+	uint32_t			log_magic;			/*Ä§·¨Ð£Ñé×Ö*/
 	uint16_t			majorv;
 	uint16_t			minorv;
 	uint64_t			log_size;

@@ -82,6 +82,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cursor\cur_json.c" />
+    <ClCompile Include="log\log_auto.c" />
     <ClCompile Include="packing\pack_api.c" />
     <ClCompile Include="packing\pack_impl.c" />
     <ClCompile Include="packing\pack_stream.c" />

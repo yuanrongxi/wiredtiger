@@ -5,6 +5,9 @@
 #include <assert.h>
 #include "wt_internal.h"
 
+WT_SESSION_IMPL* session = NULL;
+WT_CONNECTION_IMPL* conn = NULL;
+
 void test_pack()
 {
 	uint8_t buf[10], *p, *end;
@@ -116,11 +119,69 @@ void test_pack_struct()
 	printf("i1 = %d, i2 = %d, i3 = %s\n", i1, i2, s);
 }
 
+const uint8_t data[16] ={
+	0x01, 0x02, 0x03, 0x04,
+	0x01, 0x02, 0x03, 0x04,
+	0x01, 0x02, 0x03, 0x04,
+	0x01, 0x02, 0x03, 0x04,
+};
+
+/*对一条logrec的pack/unpack测试*/
+void test_pack_log()
+{
+	WT_ITEM* logrec;
+	
+	WT_ITEM item;
+	memset(&item, 0, sizeof(WT_ITEM));
+	FILE* fd = NULL;
+	const uint8_t* p;
+
+	__wt_fopen(session, "/home/1.txt", WT_FHANDLE_WRITE, 0, &fd);
+	//fd = fopen("/home/1.txt", "w");
+
+	__wt_buf_init(session, &item, sizeof(data) + 1);
+	assert(__wt_logrec_alloc(session, 128, &logrec) == 0);
+	/*写入一个二进制串对应的HEX字符串*/
+	__wt_raw_to_hex(session, data, 16, &item);
+
+	__wt_logop_col_put_pack(session, logrec, 1, 1200, &item);
+	/*跳过WT_LOG_RECORD头*/
+	p = LOG_SKIP_HEADER(logrec->data);
+	__wt_txn_op_printlog(session, &p, logrec->data + logrec->size, fd);
+
+	__wt_logrec_free(session, &logrec);
+	__wt_buf_free(session, &item);
+
+	__wt_fclose(&fd, WT_FHANDLE_WRITE);
+}
+
+void open_wt_session()
+{
+	WT_EVENT_HANDLER* handler = NULL;
+	/*模拟创建一个session*/
+	session = calloc(1, sizeof(WT_SESSION_IMPL));
+	conn = calloc(2, sizeof(WT_CONNECTION_IMPL));
+	session->iface.connection = (WT_CONNECTION *)conn;
+	/*加载日志输出函数*/
+	__wt_event_handler_set(session, handler);
+}
+
+void close_wt_session()
+{
+	free(session);
+	free(conn);
+}
+
 int main()
 {
+	open_wt_session();
+
 	//test_pack();
 	//test_pack_unpack();
 	//test_pack_struct();
+	test_pack_log();
+
+	close_wt_session();
 }
 
 
