@@ -167,6 +167,7 @@ uint8_t *p;
 	return 0;
 }
 
+/*pack一个有符号整数*/
 static inline int __wt_vpack_int(uint8_t **pp, size_t maxlen, int64_t x)
 {
 	uint8_t *p;
@@ -194,6 +195,7 @@ static inline int __wt_vpack_int(uint8_t **pp, size_t maxlen, int64_t x)
 	return (0);
 }
 
+/*unpack一个无符号整型数*/
 static inline int __wt_vunpack_uint(const uint8_t **pp, size_t maxlen, uint64_t *xp)
 {
 	const uint8_t *p;
@@ -208,6 +210,7 @@ static inline int __wt_vunpack_uint(const uint8_t **pp, size_t maxlen, uint64_t 
 		*xp = GET_BITS(*p, 6, 0);
 		p += 1;
 		break;
+
 	case POS_2BYTE_MARKER:
 	case POS_2BYTE_MARKER | 0x10:
 		WT_SIZE_CHECK(2, maxlen);
@@ -215,10 +218,12 @@ static inline int __wt_vunpack_uint(const uint8_t **pp, size_t maxlen, uint64_t 
 		*xp |= *p++;
 		*xp += POS_1BYTE_MAX + 1;
 		break;
+
 	case POS_MULTI_MARKER:
 		WT_RET(__wt_vunpack_posint(pp, maxlen, xp));
 		*xp += POS_2BYTE_MAX + 1;
-		return (0);
+		return 0;
+
 	default:
 		return (EINVAL);
 	}
@@ -228,6 +233,8 @@ static inline int __wt_vunpack_uint(const uint8_t **pp, size_t maxlen, uint64_t 
 	return 0;
 }
 
+
+/*unpack一个有符号整型数*/
 static inline int __wt_vunpack_int(const uint8_t **pp, size_t maxlen, int64_t *xp)
 {
 	const uint8_t *p;

@@ -73,7 +73,7 @@ static inline int __pack_name_init(WT_SESSION_IMPL* session, WT_CONFIG_ITEM* nam
 	pn->iskey = iskey;
 	
 	if(names->str != NULL){
-		WT_RET(__wt_config_subinit(session, &pn->config, names));
+		return 0;//WT_RET(__wt_config_subinit(session, &pn->config, names));TODO:
 	}
 	else
 		pn->genname = 1;
@@ -97,7 +97,9 @@ static inline int __pack_name_next(WT_PACK_NAME* pn, WT_CONFIG_ITEM* name)
 		pn->count++;
 	}
 	else
-		WT_RET(__wt_config_next(&pn->config, name, &ignore));
+		return 0;//WT_RET(__wt_config_next(&pn->config, name, &ignore)); TODO:
+
+	return 0;
 }
 
 /*对pack的解析,并将解析后的结果放入pv中*/
