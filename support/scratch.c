@@ -3,7 +3,7 @@
 ***************************************************************************/
 #include "wt_internal.h"
 
-/*尝试充分配ITEM中的mem*/
+/*尝试重分配ITEM中的mem*/
 int __wt_buf_grow_worker(WT_SESSION_IMPL *session, WT_ITEM *buf, size_t size)
 {
 	size_t offset;

@@ -56,10 +56,10 @@ int __wt_directory_sync(WT_SESSION_IMPL *session, char *path)
 
 err:	
 	WT_SYSCALL_RETRY(close(fd), tret);
-	/*
+	
 	if (tret != 0)
 		__wt_err(session, tret, "%s: close", path);
-		*/
+		
 	/*过滤数据库的特定错误*/
 	WT_TRET(tret);
 

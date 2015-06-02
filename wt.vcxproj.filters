@@ -34,6 +34,9 @@
     <Filter Include="c\cursor">
       <UniqueIdentifier>{7a9ee7ff-369b-4050-a2a5-7759d4813c64}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\packing">
+      <UniqueIdentifier>{7eb87fe4-6137-4a8f-9fdf-6b3fe2fa629d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -191,6 +194,15 @@
     </ClCompile>
     <ClCompile Include="test\pack_test.c">
       <Filter>test</Filter>
+    </ClCompile>
+    <ClCompile Include="packing\pack_api.c">
+      <Filter>c\packing</Filter>
+    </ClCompile>
+    <ClCompile Include="packing\pack_impl.c">
+      <Filter>c\packing</Filter>
+    </ClCompile>
+    <ClCompile Include="packing\pack_stream.c">
+      <Filter>c\packing</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

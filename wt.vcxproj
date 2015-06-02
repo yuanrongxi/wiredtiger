@@ -82,6 +82,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cursor\cur_json.c" />
+    <ClCompile Include="packing\pack_api.c" />
+    <ClCompile Include="packing\pack_impl.c" />
+    <ClCompile Include="packing\pack_stream.c" />
     <ClCompile Include="posix\os_abort.c" />
     <ClCompile Include="posix\os_alloc.c" />
     <ClCompile Include="posix\os_dir.c" />

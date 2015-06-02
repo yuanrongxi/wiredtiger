@@ -134,7 +134,7 @@ int __wt_writeunlock(WT_SESSION_IMPL *session, WT_RWLOCK *rwlock)
 	l = &rwlock->rwlock;
 	copy = *l;
 
-	/*防止对copy赋值的优化，如果不加编译屏障，可能会直接用l来代替copy,这样后面原子性的更新*/
+	/*防止对copy赋值的优化，如果不加编译屏障，可能会直接用l来代替copy,这样后面无法进行原子性的更新*/
 	WT_BARRIER();
 
 	++copy.s.writers;
