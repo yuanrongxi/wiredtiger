@@ -210,6 +210,9 @@
     <ClCompile Include="log\log_auto.c">
       <Filter>c\log</Filter>
     </ClCompile>
+    <ClCompile Include="log\log_slot.c">
+      <Filter>c\log</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
