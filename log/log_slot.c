@@ -222,7 +222,7 @@ int __wt_log_slot_wait(WT_SESSION_IMPL *session, WT_LOGSLOT *slot)
 {
 	int yield_count = 0;
 
-	WT_UNUSED(sesion);
+	WT_UNUSED(session);
 
 	while (slot->slot_state > WT_LOG_SLOT_DONE){
 		if (++yield_count < 1000)
@@ -244,6 +244,88 @@ int64_t __wt_log_slot_release(WT_LOGSLOT *slot, uint64_t size)
 	 */
 	newsize = WT_ATOMIC_ADD8(slot->slot_state, (int64_t)size);
 	return newsize;
+}
+
+/*将slot置为设置为SLOT_FREE状态，以便重新SLOT READY,在这个过程会检查slot flag，
+ *如果flag中有需要grow buffer的请求，此函数会对slot buf重分配，空间扩大到原来的2倍*/
+int __wt_log_slot_free(WT_SESSION_IMPL *session, WT_LOGSLOT *slot)
+{
+	WT_DECL_RET;
+
+	ret = 0;
+
+	if(F_ISSET(slot, SLOT_BUF_GROW)){
+		/*进行统计信息更新*/
+		WT_STAT_FAST_CONN_INCR(session, log_buffer_grow);
+		WT_STAT_FAST_CONN_INCRV(session, log_buffer_size, slot->slot_buf.memsize);
+
+		WT_ERR(__wt_buf_grow(session, &slot->slot_buf, slot->slot_buf.memsize * 2));
+	}
+
+err:
+	/*进行slot状态更新*/
+	slot->flags = SLOT_INIT_FLAGS;
+	slot->slot_state = WT_LOG_SLOT_FREE;
+
+	return ret;
+}
+
+/*对slot pool中的slot进行grow buffer检查，并对对应的slot buffer做grow操作*/
+int __wt_log_slot_grow_buffers(WT_SESSION_IMPL *session, size_t newsize)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+	WT_LOG *log;
+	WT_LOGSLOT *slot;
+	int64_t orig_state;
+	uint64_t old_size, total_growth;
+	int i;
+
+	conn = S2C(session);
+	log = conn->log;
+	total_growth = 0;
+
+	/*更新统计计数*/
+	WT_STAT_FAST_CONN_INCR(session, log_buffer_grow);
+
+	/*这个spin lock是防止其他线程同时grow buffer*/
+	__wt_spin_lock(session, &log->log_slot_lock);
+	for(i < 0; i < SLOT_POOL; i++){
+		slot = &log->slot_pool[i];
+
+		/*正在使用的slot不在grow buffer之列,也避开对应的slot原子操作spin*/
+		if (slot->slot_state != WT_LOG_SLOT_FREE && slot->slot_state != WT_LOG_SLOT_READY)
+			continue;
+
+		/*不强制没有设置grow buffer的slot进行grow*/
+		if(slot->slot_buf.memsize > 10 * newsize && !F_ISSET(slot, SLOT_BUF_GROW))
+			continue;
+
+		/*抢占slot*/
+		orig_state = WT_ATOMIC_CAS_VAL8(slot->slot_state, WT_LOG_SLOT_FREE, WT_LOG_SLOT_PENDING);
+		if (orig_state != WT_LOG_SLOT_FREE) {
+			orig_state = WT_ATOMIC_CAS_VAL8(slot->slot_state, WT_LOG_SLOT_READY, WT_LOG_SLOT_PENDING);
+			if (orig_state != WT_LOG_SLOT_READY)
+				continue;
+		}
+		
+		/*进行grow buffer,每一放大到原来的2倍空间*/
+		old_size = slot->slot_buf.memsize;
+		F_CLR(slot, SLOT_BUF_GROW);
+		WT_ERR(__wt_buf_grow(session, &slot->slot_buf, WT_MAX(slot->slot_buf.memsize * 2, newsize)));
+
+		/*buffer grow过程完成，需要将slot原来的状态设置回来*/
+		slot->slot_state = orig_state;
+		total_growth += slot->slot_buf.memsize - old_size;
+
+		slot->slot_state = orig_state;
+	}
+
+err:
+	__wt_spin_unlock(session, &log->log_slot_lock);
+	WT_STAT_FAST_CONN_INCRV(session, log_buffer_size, total_growth);
+
+	return ret;
 }
 
 

@@ -45,7 +45,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -82,6 +82,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cursor\cur_json.c" />
+    <ClCompile Include="log\log.c" />
     <ClCompile Include="log\log_auto.c" />
     <ClCompile Include="log\log_slot.c" />
     <ClCompile Include="packing\pack_api.c" />

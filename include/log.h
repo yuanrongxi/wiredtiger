@@ -82,7 +82,7 @@
 /*非法的slot index值，相当于-1*/
 #define	SLOT_INVALID_INDEX	0xffffffff
 
-#define LOG_FIRST_RECORD	log->allocate
+#define LOG_FIRST_RECORD	log->allocsize
 
 #define	SLOT_ACTIVE			1
 #define	SLOT_POOL			16
@@ -107,7 +107,7 @@ typedef /*WT_COMPILER_TYPE_ALIGN(WT_CACHE_LINE_ALIGNMENT)*/ struct
 	WT_ITEM				slot_buf;					/* Buffer for grouped writes */
 	int32_t				slot_churn;					/* Active slots are scarce. */
 
-	uint32_t			flags;						/* slot flags*/	
+	uint32_t			flags;						/* slot flags,主要是对slot的一些调整操作标识*/	
 } WT_LOGSLOT;
 
 /*WT_MYSLOT结构*/
@@ -169,7 +169,7 @@ typedef struct
 	uint16_t			flags;
 	uint8_t				unused[2];
 	uint32_t			mem_len;
-	uint8_t				record[0];
+	uint8_t				record[0];		/*logrec body*/
 } WT_LOG_RECORD;
 
 #define	WT_LOG_MAGIC			0x101064
