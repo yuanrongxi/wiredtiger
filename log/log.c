@@ -556,5 +556,186 @@ err:
 	return ret;
 }
 
+/*为session打开一个日志文件， 目的是找出已经存在日志文件的最大LSN,
+ *并将其作为新日志文件的文件名，如果不存在旧日志文件，
+ * 用__wt_log_newfile为其创建一个新的日志*/
+int __wt_log_open(WT_SESSION_IMPL *session)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+	WT_LOG *log;
+	uint32_t firstlog, lastlog, lognum;
+	u_int i, logcount;
+	char **logfiles;
+
+	conn = S2C(session);
+	log = conn->log;
+	logfiles = NULL;
+	logcount = 0;
+	lastlog = 0;
+	firstlog = UINT32_MAX;
+
+	/*打开session connection对应的日志文件目录索引文件*/
+	if (log->log_dir_fh == NULL) {
+		WT_RET(__wt_verbose(session, WT_VERB_LOG, "log_open: open fh to directory %s", conn->log_path));
+		WT_RET(__wt_open(session, conn->log_path, 0, 0, WT_FILE_TYPE_DIRECTORY, &log->log_dir_fh));
+	}
+
+	/*在session对应的日志文件目录下将所有已经存在临时日志文件名存入logfiles中*/
+	WT_ERR(__log_get_files(session, WT_LOG_TMPNAME, &logfiles, &logcount));
+	/*删除所有的临时日志文件,因为要打开一个更大LSN对应的文件，就必须将现在关闭现在正在使用的LSN日志文件，那么它对应的
+	 *临时文件就会被关闭*/
+	for(i = 0; i < logcount; i++){
+		WT_ERR(__wt_log_extract_lognum(session, logfiles[i], &lognum));
+		WT_ERR(__wt_log_remove(session, WT_LOG_TMPNAME, lognum));
+	}
+
+	__wt_log_files_free(session, logfiles, logcount);
+
+	logfiles = NULL;
+	logcount = 0;
+
+	/*获得所有预分配日志文件的文件名,并通过删除所有预分配文件*/
+	WT_ERR(__log_get_files(session, WT_LOG_PREPNAME, &logfiles, &logcount));
+
+	for (i = 0; i < logcount; i++) {
+		WT_ERR(__wt_log_extract_lognum(session, logfiles[i], &lognum));
+		WT_ERR(__wt_log_remove(session, WT_LOG_PREPNAME, lognum));
+	}
+	__wt_log_files_free(session, logfiles, logcount);
+	logfiles = NULL;
+
+	/*获取正式的日志文件名，并通过文件名确定lastlog和firstlog*/
+	WT_ERR(__log_get_files(session, WT_LOG_FILENAME, &logfiles, &logcount));
+	for (i = 0; i < logcount; i++) {
+		WT_ERR(__wt_log_extract_lognum(session, logfiles[i], &lognum));
+		lastlog = WT_MAX(lastlog, lognum);
+		firstlog = WT_MIN(firstlog, lognum);
+	}
+
+	/*用lastlog作为fileid*/
+	log->fileid = lastlog;
+	WT_ERR(__wt_verbose(session, WT_VERB_LOG, "log_open: first log %d last log %d", firstlog, lastlog));
+	/*没有最小的lsn，将其设置为（1，0)*/
+	if (firstlog == UINT32_MAX) {
+		WT_ASSERT(session, logcount == 0);
+		WT_INIT_LSN(&log->first_lsn);
+	} 
+	else {
+		log->first_lsn.file = firstlog;
+		log->first_lsn.offset = 0;
+	}
+	/*用__wt_log_newfile创建一个新的日志文件，并将日志头信息写入文件中*/
+	WT_ERR(__wt_log_newfile(session, 1, NULL));
+	/*发现有先前的日志文件，保存log的状态*/
+	if (logcount > 0) {
+		log->trunc_lsn = log->alloc_lsn;
+		FLD_SET(conn->log_flags, WT_CONN_LOG_EXISTED);
+	}
+
+err:
+	if(logfiles != NULL)
+		__wt_log_files_free(session, logfiles, logcount);
+
+	return ret;
+}
+
+/*关闭session对应的日志文件*/
+int __wt_log_close(WT_SESSION_IMPL *session)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_LOG *log;
+
+	conn = S2C(session);
+	log = conn->log;
+
+	/*关闭日志文件*/
+	if (log->log_close_fh != NULL && log->log_close_fh != log->log_fh) {
+		WT_RET(__wt_verbose(session, WT_VERB_LOG, "closing old log %s", log->log_close_fh->name));
+		WT_RET(__wt_fsync(session, log->log_close_fh));
+		WT_RET(__wt_close(session, &log->log_close_fh));
+	}
+
+	if (log->log_fh != NULL) {
+		WT_RET(__wt_verbose(session, WT_VERB_LOG, "closing log %s", log->log_fh->name));
+		WT_RET(__wt_fsync(session, log->log_fh));
+		WT_RET(__wt_close(session, &log->log_fh));
+		log->log_fh = NULL;
+	}
+
+	/*fsync日志目录索引文件*/
+	if (log->log_dir_fh != NULL) {
+		WT_RET(__wt_verbose(session, WT_VERB_LOG, "closing log directory %s", log->log_dir_fh->name));
+		WT_RET(__wt_directory_sync_fh(session, log->log_dir_fh));
+		WT_RET(__wt_close(session, &log->log_dir_fh));
+		log->log_dir_fh = NULL;
+	}
+
+	return 0;
+}
+
+/*确定一个日志文件有效数据的空间大小*/
+static int __log_filesize(WT_SESSION_IMPL* session, WT_FH* fh, wt_off_t* eof)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+	WT_LOG *log;
+	wt_off_t log_size, off, off1;
+	uint32_t allocsize, bufsz;
+	char *buf, *zerobuf;
+
+	conn = S2C(session);
+	log = conn->log;
+	if(eof == NULL)
+		return 0;
+
+	*eof = 0;
+	WT_RET(__wt_filesize(session, fh, &log_size));
+	if(log == NULL)
+		allocsize = LOG_ALIGN;
+	else
+		allocsize = log->allocsize;
+
+	buf = zerobuf = NULL;
+	if (allocsize < WT_MEGABYTE && log_size > WT_MEGABYTE) /*最大以1M方式对齐*/
+		bufsz = WT_MEGABYTE;
+	else
+		bufsz = allocsize;
+
+	/*开辟两个匹配的缓冲区*/
+	WT_RET(__wt_calloc_def(session, bufsz, &buf));
+	WT_ERR(__wt_calloc_def(session, bufsz, &zerobuf));
+
+	/*从文件末尾开始向前，每次读取1个对齐长度的数据，和zerobuf比较，直到有不为0的数据为止，
+	 *不为0的数据表示到了log的末尾,日志文件在__log_prealloc是物理大小为log->log_file_max,数据为0的*/
+	for (off = log_size - (wt_off_t)bufsz; off >= 0; off -= (wt_off_t)bufsz) {
+		WT_ERR(__wt_read(session, fh, off, bufsz, buf));
+		if (memcmp(buf, zerobuf, bufsz) != 0)
+			break;
+	}
+	/*已经到了文件开始位置*/
+	if(off < 0)
+		off = 0;
+
+	/*进行块内位置的确认，例如，在128 ~ 256这个buf段中有数据不匹配，找到最后一个不为0的偏移*/
+	for (off1 = bufsz - allocsize; off1 > 0; off1 -= (wt_off_t)allocsize){
+		if (memcmp(buf + off1, zerobuf, sizeof(uint32_t)) != 0)
+			break;
+	}
+
+	off = off + off1;
+	/*将eof设置到最后一个不为0的数据偏移上*/
+	*eof = off + (wt_off_t)allocsize;
+
+err:
+	if (buf != NULL)
+		__wt_free(session, buf);
+
+	if(zerobuf != NULL)
+		__wt_free(session, zerobuf);
+
+	return ret;
+}
+
 
 
