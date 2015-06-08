@@ -737,5 +737,252 @@ err:
 	return ret;
 }
 
+/*release一个log对应的slot， 在这个过程先会将slot buffer中的数据写入到对应文件的page cache中
+ *然后对文件进行sync操作，进行日志落盘*/
+static int __log_release(WT_SESSION_IMPL* session, WT_LOGSLOT* slot, int* freep)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+	WT_LOG *log;
+	WT_LSN sync_lsn;
+	size_t write_size;
+	int locked, yield_count;
+	WT_DECL_SPINLOCK_ID(id);	
+
+	conn = S2C(session);
+	log = conn->log;
+	locked = 0;
+	yield_count = 0;
+	*freep = 1;
+
+	/*将slot的缓冲区中的log record数据写入到对应文件中*/
+	if(F_ISSET(slot, SLOT_BUFFERED)){
+		write_size = (size_t)(slot->slot_end_lsn.offset - slot->slot_start_offset);
+		WT_ERR(__wt_write(session, slot->slot_fh, slot->slot_start_offset, write_size, slot->slot_buf.mem));
+	}
+
+	/*slot是一个dummy slot，不是buffer缓冲数据的slot,这个过程无需回收slot到slot pool中*/
+	if(F_ISSET(slot, SLOT_BUFFERED) && !F_ISSET(slot, SLOT_SYNC | SLOT_SYNC_DIR)){
+		*freep = 0;
+		slot->slot_state = WT_LOG_SLOT_WRITTEN;
+
+		WT_ERR(__wt_cond_signal(session, conn->log_wrlsn_cond));
+
+		goto done;
+	}
+
+	/*修改统计信息*/
+	WT_STAT_FAST_CONN_INCR(session, log_release_write_lsn);
+	/*判断write lsn是否达到release lsn的位置，如果达到，进行write_lsn的更新*/
+	while (LOG_CMP(&log->write_lsn, &slot->slot_release_lsn) != 0) {
+		if (++yield_count < 1000)
+			__wt_yield();
+		else
+			WT_ERR(__wt_cond_wait(session, log->log_write_cond, 200));
+	}
+
+	log->write_lsn = slot->slot_end_lsn;
+	/*log write lsn做了更新，让等log_write_cond的线程重新进行write lsn判断*/
+	WT_ERR(__wt_cond_signal(session, log->log_write_cond));
+
+	/*如果slot处于关闭文件的表示，通知对应等待线程进行文件关闭*/
+	if (F_ISSET(slot, SLOT_CLOSEFH))
+		WT_ERR(__wt_cond_signal(session, conn->log_close_cond));
+
+	while (F_ISSET(slot, SLOT_SYNC | SLOT_SYNC_DIR)){
+		/*如果正在sync的file小于slot->slot_end_lsn.file，表示slot对应的日志文件还没有完成sync操作(不能刷end_lsn对应的文件)，必须进行等待*/
+		if (log->sync_lsn.file < slot->slot_end_lsn.file || __wt_spin_trylock(session, &log->log_sync_lock, &id) != 0) {
+				WT_ERR(__wt_cond_wait(session, log->log_sync_cond, 10000));
+				continue;
+		}
+		/*到这个位置，本线程获得了log_sync_lock,可以进行sync操作*/
+		locked = 1;
+
+		sync_lsn = slot->slot_end_lsn;
+
+		/*先刷新log dir path索引文件*/
+		if (F_ISSET(slot, SLOT_SYNC_DIR) &&(log->sync_dir_lsn.file < sync_lsn.file)) {
+			WT_ASSERT(session, log->log_dir_fh != NULL);
+			WT_ERR(__wt_verbose(session, WT_VERB_LOG, "log_release: sync directory %s", log->log_dir_fh->name));
+			WT_ERR(__wt_directory_sync_fh(session, log->log_dir_fh));
+			log->sync_dir_lsn = sync_lsn;
+			WT_STAT_FAST_CONN_INCR(session, log_sync_dir);
+		}
+
+		/*在刷新日志文件*/
+		if (F_ISSET(slot, SLOT_SYNC) && LOG_CMP(&log->sync_lsn, &slot->slot_end_lsn) < 0) {
+			WT_ERR(__wt_verbose(session, WT_VERB_LOG, "log_release: sync log %s", log->log_fh->name));
+			WT_STAT_FAST_CONN_INCR(session, log_sync);
+			WT_ERR(__wt_fsync(session, log->log_fh));
+			/*更改sync_lsn，通知其他线程log->sync_lsn产生了改变，重新进行比对判断*/
+			log->sync_lsn = sync_lsn;
+			WT_ERR(__wt_cond_signal(session, log->log_sync_cond));
+		}
+
+		/*清除掉slot的SYNC标识*/
+		F_CLR(slot, SLOT_SYNC | SLOT_SYNC_DIR);
+		/*释放sync spin lock*/
+		locked = 0;
+		__wt_spin_unlock(session, &log->log_sync_lock);
+		/*防止其他线程重新把SLOT_SYNC设置回来*/
+		break;
+	}
+err:
+	if(locked)
+		__wt_spin_unlock(session, &log->log_sync_lock);
+
+	/*如果err,设置slot的error值*/
+	if (ret != 0 && slot->slot_error == 0)
+		slot->slot_error = ret;
+
+done:
+	return ret;
+}
+
+/*为日志session建立一个新的日志文件，并将日志文件头信息写入到日志文件中*/
+int __wt_log_newfile(WT_SESSION_IMPL *session, int conn_create, int *created)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+	WT_LOG *log;
+	WT_LSN end_lsn;
+	int create_log;
+
+	conn = S2C(session);
+	log = conn->log;
+	create_log = 1;
+	
+	/*等待__log_close_server线程主体函数对log_close_fh的关闭完成，因为在新建新的日志文件，正在使用的
+	 *日志文件可能正在被写，所以一定要等待其写完成*/
+	while(log->log_close_fh != NULL){
+		WT_STAT_FAST_CONN_INCR(session, log_close_yields);
+		__wt_yield();
+	}
+	log->log_close_fh = log->log_fh;
+	log->fileid++;
+
+	ret = 0;
+	/*预先分配一个日志文件，这样做的目的可能是加快文件的建立*/
+	if(conn->log_prealloc){
+		ret = __log_alloc_prealloc(session, log->fileid);
+		/*如果返回的是ret = 0, 表示log->fileid对应的文件已经被其他的线程创建了*/
+		if (ret == 0)
+			create_log = 0;
+
+		/*创建错误*/
+		if (ret != 0 && ret != WT_NOTFOUND)
+			return ret;
+	}
+
+	/*没有预分配文件，进行重新创建，并将日志文件头信息写入到新建立的日志文件中*/
+	if (create_log && (ret = __wt_log_allocfile(session, log->fileid, WT_LOG_FILENAME, 0)) != 0)
+		return ret;
+
+	/*打开新创建的日志文件*/
+	WT_RET(__log_openfile(session, 0, &log->log_fh, WT_LOG_FILENAME, log->fileid));
+
+	/*当前日志alloc_lsn的位置做更新*/
+	log->alloc_lsn.file = log->fileid;
+	log->alloc_lsn.offset = LOG_FIRST_RECORD;
+	end_lsn = log->alloc_lsn;
+
+	if (conn_create) {
+		/*对新建日志数据落盘*/
+		WT_RET(__wt_fsync(session, log->log_fh));
+		log->sync_lsn = end_lsn;
+		log->write_lsn = end_lsn;
+	}
+
+	if (created != NULL)
+		*created = create_log;
+
+	return 0;
+}
+
+/*进行日志读取，一般在redo log重演时使用*/
+int __wt_log_read(WT_SESSION_IMPL *session, WT_ITEM* record, WT_LSN* lsnp, uint32_t flags)
+{
+	WT_DECL_ITEM(uncitem);
+	WT_DECL_RET;
+	WT_LOG_RECORD *logrec;
+	WT_ITEM swap;
+
+	WT_ERR(__log_read_internal(session, record, lsnp, flags));
+	logrec = (WT_LOG_RECORD *)record->mem;
+
+	/*如果日志记录是经过了压缩的，进行解压缩,压缩日志个人感觉会影响日志写的效率！在wiredtiger占用的CPU过高时，可以考虑将日志压缩取消*/
+	if (F_ISSET(logrec, WT_LOG_RECORD_COMPRESSED)) {
+		WT_ERR(__log_decompress(session, record, &uncitem));
+
+		swap = *record;
+		*record = *uncitem;
+		*uncitem = swap;
+	}
+err:
+	__wt_scr_free(session, &uncitem);
+	return ret;
+}
+
+/*从日志文件中读取lsnp指定偏移出的一条日志log record*/
+static int __log_read_internal(WT_SESSION_IMPL *session, WT_ITEM *record, WT_LSN *lsnp, uint32_t flags)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+	WT_FH *log_fh;
+	WT_LOG *log;
+	WT_LOG_RECORD *logrec;
+	uint32_t cksum, rdup_len, reclen;
+
+	WT_UNUSED(flags);
+
+	if (lsnp == NULL || record == NULL)
+		return 0;
+
+	conn = S2C(session);
+	log = conn->log;
+
+	/*lsnp->offset一定是log->allocsize方式对齐的*/
+	if (lsnp->offset % log->allocsize != 0 || lsnp->file > log->fileid)
+		return WT_NOTFOUND;
+
+	/*打开日志文件*/
+	WT_RET(__log_openfile(session, 0, &log_fh, WT_LOG_FILENAME, lsnp->file));
+
+	/*读取log rec,logrec最小单位是1个log->allocsize*/
+	WT_ERR(__wt_buf_init(session, record, log->allocsize));
+	WT_ERR(__wt_read(session, log_fh, lsnp->offset, (size_t)log->allocsize, record->mem));
+
+	/*获得log rec的长度*/
+	reclen = *(uint32_t *)record->mem;
+	if (reclen == 0) {
+		ret = WT_NOTFOUND;
+		goto err;
+	}
+
+	/*读取logrec剩余部分*/
+	if (reclen > log->allocsize) {
+		rdup_len = __wt_rduppo2(reclen, log->allocsize);
+		WT_ERR(__wt_buf_grow(session, record, rdup_len));
+		WT_ERR(__wt_read(session, log_fh, lsnp->offset, (size_t)rdup_len, record->mem));
+	}
+
+	logrec = (WT_LOG_RECORD *)record->mem;
+	cksum = logrec->checksum;
+	logrec->checksum = 0;
+	/*进行check sum检查*/
+	logrec->checksum = __wt_cksum(logrec, logrec->len);
+	if (logrec->checksum != cksum)
+		WT_ERR_MSG(session, WT_ERROR, "log_read: Bad checksum");
+
+	record->size = logrec->len;
+	WT_STAT_FAST_CONN_INCR(session, log_reads);
+
+err:
+	WT_TRET(__wt_close(session, &log_fh));
+	return ret;
+}
+
+
+
 
 
