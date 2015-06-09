@@ -120,7 +120,7 @@ typedef struct
 /*定义WT_LOG结构*/
 typedef struct  
 {
-	uint32_t			allocsize;
+	uint32_t			allocsize;					/*logrec最小对齐单元长度*/
 	wt_off_t			log_written;
 
 	/*log文件相关变量*/
@@ -128,18 +128,18 @@ typedef struct
 	uint32_t			prep_fileid;
 	uint32_t			prep_missed;
 
-	WT_FH*				log_fh;				/*正在使用的log文件handler*/
-	WT_FH*				log_close_fh;		/*上一个被关闭的log文件handler*/
-	WT_FH*				log_dir_fh;			/*log目录索引文件的handler*/
+	WT_FH*				log_fh;						/*正在使用的log文件handler*/
+	WT_FH*				log_close_fh;				/*上一个被关闭的log文件handler*/
+	WT_FH*				log_dir_fh;					/*log目录索引文件的handler*/
 
 	/*系统的LSN定义*/
 	WT_LSN				alloc_lsn;					/* Next LSN for allocation */
-	WT_LSN				ckpt_lsn;					/* Last checkpoint LSN */
-	WT_LSN				first_lsn;					/* First LSN */
-	WT_LSN				sync_dir_lsn;				/* LSN of the last directory sync */
-	WT_LSN				sync_lsn;					/* LSN of the last sync */
-	WT_LSN				trunc_lsn;					/* End LSN for recovery truncation */
-	WT_LSN				write_lsn;					/* Last LSN written to log file */
+	WT_LSN				ckpt_lsn;					/* 最后一次建立ckeckpoint的LSN位置 */
+	WT_LSN				first_lsn;					/* 日志起始的LSN */
+	WT_LSN				sync_dir_lsn;				/* 最后一次sync dir的LSN位置 */
+	WT_LSN				sync_lsn;					/* 日志文件最后一次sync LSN位置*/
+	WT_LSN				trunc_lsn;					/* 在恢复过程中，如果有日志数据损坏，那么需要截掉这个位置后的所有日志文件，表示开始截掉数据的LSN*/
+	WT_LSN				write_lsn;					/* 最后一次写日志的LSN位置 */
 
 	/*log对象的线程同步latch*/
 	WT_SPINLOCK			log_lock;					/* Locked: Logging fields */
@@ -154,10 +154,10 @@ typedef struct
 	WT_CONDVAR*			log_write_cond;
 
 	uint32_t			pool_index;
-	WT_LOGSLOT*			slot_array[SLOT_ACTIVE];
-	WT_LOGSLOT			slot_pool[SLOT_POOL];
+	WT_LOGSLOT*			slot_array[SLOT_ACTIVE];	/*已就绪的log slots*/
+	WT_LOGSLOT			slot_pool[SLOT_POOL];		/*log slots池，所有的log slot都在里面*/
 
-	uint32_t			flags;
+	uint32_t			flags;						/*当前日志对象操作的标识：例如：WT_LOG_DSYNC,WT_LOGSCAN_ONE等*/
 } WT_LOG;
 
 /*wt record log的定义*/

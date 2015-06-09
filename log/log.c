@@ -9,7 +9,7 @@ static int __log_read_internal(WT_SESSION_IMPL *, WT_ITEM *, WT_LSN *, uint32_t)
 static int __log_write_internal(WT_SESSION_IMPL *, WT_ITEM *, WT_LSN *, uint32_t);
 
 /*数据压缩的起始位置，会跳过logrec的头*/
-#define WT_LOG__COMPRESS_SKIP	(offsetof(WT_LOG_RECORD, record))
+#define WT_LOG_COMPRESS_SKIP	(offsetof(WT_LOG_RECORD, record))
 
 /*触发log建立一个checkpoint，向archive thread触发一个checkpoint信号*/
 int __wt_log_ckpt(WT_SESSION_IMPL *session, WT_LSN *ckp_lsn)
@@ -267,7 +267,7 @@ static int __log_decompress(WT_SESSION_IMPL session*, WT_ITEM* in, WT_ITEM** out
 	conn = S2C(session);
 	logrec = (WT_LOG_RECORD *)in->mem;
 
-	skip = WT_LOG__COMPRESS_SKIP;
+	skip = WT_LOG_COMPRESS_SKIP;
 	compressor = conn->log_compressor;
 	if(compressor == NULL || compressor->decompress == NULL){
 		WT_ERR_MSG(session, WT_ERROR, "log_read: Compressed record with no configured compressor");
@@ -979,6 +979,482 @@ static int __log_read_internal(WT_SESSION_IMPL *session, WT_ITEM *record, WT_LSN
 
 err:
 	WT_TRET(__wt_close(session, &log_fh));
+	return ret;
+}
+
+/*进行session对应日志读取，读取完成后通过func函数进行日志重演*/
+int __wt_log_scan(WT_SESSION_IMPL *session, WT_LSN *lsnp, uint32_t flags, int (*func)(WT_SESSION_IMPL *session, 
+				WT_ITEM *record, WT_LSN *lsnp, WT_LSN *next_lsnp, void *cookie, int firstrecord), void *cookie)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_ITEM(uncitem);
+	WT_DECL_RET;
+	WT_FH *log_fh;
+	WT_ITEM buf;
+	WT_LOG *log;
+	WT_LOG_RECORD *logrec;
+	WT_LSN end_lsn, next_lsn, rd_lsn, start_lsn;
+	wt_off_t log_size;
+	uint32_t allocsize, cksum, firstlog, lastlog, lognum, rdup_len, reclen;
+	u_int i, logcount;
+	int eol;
+	int firstrecord;
+	char **logfiles;
+
+	conn = S2C(session);
+	log = conn->log;
+	log_fh = NULL;
+	logcount = 0;
+	logfiles = NULL;
+	firstrecord = 1;
+	eol = 0;
+	WT_CLEAR(buf);
+
+	/*重演日志函数指针不能为NULL*/
+	if (func == NULL)
+		return 0;
+
+	if (LF_ISSET(WT_LOGSCAN_RECOVER)){
+		WT_RET(__wt_verbose(session, WT_VERB_LOG, "__wt_log_scan truncating to %u/%" PRIuMAX, log->trunc_lsn.file, (uintmax_t)log->trunc_lsn.offset));
+	}
+
+	if(log != NULL){
+		/*获得日志记录对齐长度*/
+		allocsize = log->allocsize;
+		if(lsnp == NULL){
+			if (LF_ISSET(WT_LOGSCAN_FIRST)) /*从第日志起始位置开始重演*/
+				start_lsn = log->first_lsn;
+			else if (LF_ISSET(WT_LOGSCAN_FROM_CKP)) /*从checkpoint处进行重演*/
+				start_lsn = log->ckpt_lsn;
+			else
+				return (WT_ERROR);	/* Illegal usage */
+		}
+		else{
+			/*如果指定一个重演的位置(lsnp != NULL),则不可能是从起始位置或者checkpoint出重演,这本来就是冲突的*/
+			if (LF_ISSET(WT_LOGSCAN_FIRST|WT_LOGSCAN_FROM_CKP))
+				WT_RET_MSG(session, WT_ERROR, "choose either a start LSN or a start flag");
+
+			/*重演日志位置不合法*/
+			if(lsnp->offset % allocsize != 0 || lsnp->file > log->fileid)
+				return WT_NOTFOUND;
+
+			start_lsn = *lsnp;
+			if(WT_IS_INIT_LSN(&start_lsn))
+				start_lsn = log->first_lsn;
+		}
+		/*确定日志结束位置*/
+		end_lsn = log->alloc_lsn;
+	}
+	else{
+		allocsize = LOG_ALIGN;
+		lastlog = 0;
+		firstlog = UINT32_MAX;
+
+		/*获得日志文件名列表*/
+		WT_RET(__log_get_files(session, WT_LOG_FILENAME, &logfiles, &logcount));
+		if(logcount == 0) /*没有任何日志文件，无需重演*/
+			return ENOTSUP;
+
+		/*从日志文件中获取重演的起始位置（start lsn）和结束位置(end lsn)*/
+		for (i = 0; i < logcount; i++) {
+			WT_ERR(__wt_log_extract_lognum(session, logfiles[i], &lognum));
+			lastlog = WT_MAX(lastlog, lognum);
+			firstlog = WT_MIN(firstlog, lognum);
+		}
+
+		start_lsn.file = firstlog;
+		end_lsn.file = lastlog;
+		start_lsn.offset = end_lsn.offset = 0;
+
+		__wt_log_files_free(session, logfiles, logcount);
+		logfiles = NULL;
+	}
+
+	/*开始重演日志，从开始的文件读到结束的文件*/
+	WT_ERR(__log_openfile(session, 0, &log_fh, WT_LOG_FILENAME, start_lsn.file));
+	WT_ERR(__log_filesize(session, log_fh, &log_size));
+	for(;;){
+		/*已经读到最后一条记录了，切换到下一个文件*/
+		if(rd_lsn.offset + allocsize > log_size){ 
+advance:
+			WT_ERR(__wt_close(session, &log_fh));
+			log_fh = NULL;
+			eol = 1;
+
+			/*如果是日志重演模式，直接删除掉无效的数据，使之与allocsize对齐*/
+			if (LF_ISSET(WT_LOGSCAN_RECOVER))
+				WT_ERR(__log_truncate(session, &rd_lsn, WT_LOG_FILENAME, 1));
+
+			rd_lsn.file++;
+			rd_lsn.offset = 0;
+
+			/*已经到最后一个文件了，重演完毕*/
+			if(rd_lsn.file > end_lsn.file)
+				break;
+			/*打开下一个文件*/
+			WT_ERR(__log_openfile(session, 0, &log_fh, WT_LOG_FILENAME, rd_lsn.file));
+			WT_ERR(__log_filesize(session, log_fh, &log_size));
+			eol = 0;
+
+			continue;
+		}
+
+		/*先读取一个对齐长度，因为一个logrec至少为一个allocsize长度对齐*/
+		WT_ASSERT(session, buf.memsize >= allocsize);
+		WT_ERR(__wt_read(session, log_fh, rd_lsn.offset, (size_t)allocsize, buf.mem));
+		/*确定logrec的长度*/
+		reclen = *(uint32_t *)buf.mem;
+		if(reclen == 0){
+			eol = 1;
+			break;
+		}
+
+		/*求reclen对齐allocsize的长度*/
+		rdup_len = __wt_rduppo2(reclen, allocsize);
+		/*根据logrec的长度，读取剩未读出的长度*/
+		if(rdup_len > allocsize){ 
+			if (rd_lsn.offset + rdup_len > log_size) /*超出文件长度，数据存储在下一个文件中*/
+				goto advance;
+
+			WT_ERR(__wt_buf_grow(session, &buf, rdup_len));
+			WT_ERR(__wt_read(session, log_fh, rd_lsn.offset, (size_t)rdup_len, buf.mem));
+			WT_STAT_FAST_CONN_INCR(session, log_scan_rereads);
+		}
+
+		/*进行checksum检查*/
+		buf.size = reclen;
+		logrec = (WT_LOG_RECORD *)buf.mem;
+		cksum = logrec->checksum;
+		logrec->checksum = 0;
+		logrec->checksum = __wt_cksum(logrec, logrec->len);
+		if(cksum != logrec->checksum){
+			/*如果checksum异常，说明接下来的日志都是不可用的，我们必须终止后面的重演，并把log文件从此lsn位置截掉后面的数据*/
+			if (log != NULL)
+				log->trunc_lsn = rd_lsn;
+
+			if (LF_ISSET(WT_LOGSCAN_ONE))
+				ret = WT_NOTFOUND;
+
+			break;
+		}
+
+		WT_STAT_FAST_CONN_INCR(session, log_scan_records);
+		/*确定下一个logrec的位置*/
+		next_lsn = rd_lsn;
+		next_lsn.offset += (wt_off_t)rdup_len;
+		if (rd_lsn.offset != 0){
+			/*如果日志有压缩，进行logrec body解压缩*/
+			if (F_ISSET(logrec, WT_LOG_RECORD_COMPRESSED)) {
+				WT_ERR(__log_decompress(session, &buf, &uncitem));
+				/*进行日志重演处理*/
+				WT_ERR((*func)(session, uncitem, &rd_lsn, &next_lsn, cookie, firstrecord)); __wt_scr_free(session, &uncitem);
+			}
+			else{
+				/*进行日志重演处理*/
+				WT_ERR((*func)(session, &buf, &rd_lsn, &next_lsn, cookie, firstrecord));
+			}
+
+			firstrecord = 0;
+			if(LF_ISSET(WT_LOGSCAN_ONE))
+				break;
+		}
+		rd_lsn = next_lsn;
+	}
+
+	/* 日过我们是wt重启过程中的日志重演，需要截取掉无效的日志文件*/
+	if (LF_ISSET(WT_LOGSCAN_RECOVER) && LOG_CMP(&rd_lsn, &log->trunc_lsn) < 0)
+		WT_ERR(__log_truncate(session, &rd_lsn, WT_LOG_FILENAME, 0));
+
+err:
+	WT_STAT_FAST_CONN_INCR(session, log_scans);
+
+	if (logfiles != NULL)
+		__wt_log_files_free(session, logfiles, logcount);
+
+	__wt_buf_free(session, &buf);
+	__wt_scr_free(session, &uncitem);
+
+	if (LF_ISSET(WT_LOGSCAN_ONE) && eol && ret == 0)
+		ret = WT_NOTFOUND;
+
+	/*没有日志文件数据，说明不需要重演，也就算成功了*/
+	if (ret == ENOENT)
+		ret = 0;
+
+	WT_TRET(__wt_close(session, &log_fh));
+
+	return ret;
+}
+
+/*不通过合并buffer来写日志，这样会有很多的小IO操作*/
+static int __log_direct_write(WT_SESSION_IMPL *session, WT_ITEM *record, WT_LSN *lsnp, uint32_t flags)
+{
+	WT_DECL_RET;
+	WT_LOG *log;
+	WT_LOGSLOT tmp;
+	WT_MYSLOT myslot;
+	int dummy, locked;
+	WT_DECL_SPINLOCK_ID(id);
+
+	log = S2C(session)->log;
+	myslot.slot = &tmp;
+	myslot.offset = 0;
+	dummy = 0;
+	WT_CLEAR(tmp);
+
+	/*获得slot lock*/
+	if (__wt_spin_trylock(session, &log->log_slot_lock, &id) != 0)
+		return EAGAIN;
+
+	locked = 1;
+
+	/*用一个临时的slot来进行工作，设置为同步sync操作*/
+	if (LF_ISSET(WT_LOG_DSYNC | WT_LOG_FSYNC))
+		F_SET(&tmp, SLOT_SYNC_DIR);
+
+	if (LF_ISSET(WT_LOG_FSYNC))
+		F_SET(&tmp, SLOT_SYNC);
+
+	/*对文件和slot start lsn的更改*/
+	WT_ERR(__log_acquire(session, record->size, &tmp));
+	
+	__wt_spin_unlock(session, &log->log_slot_lock);
+	locked = 0;
+
+	/*进行数据写操作*/
+	WT_ERR(__log_fill(session, &myslot, 1, record, lsnp));
+	WT_ERR(__log_release(session, &tmp, &dummy));
+
+err:
+	if(locked)
+		__wt_spin_unlock(session, &log->log_slot_lock);
+
+	return ret;
+}
+
+/*将一个logrec写入日志文件中,在这个过程如果设置了日志压缩，会对logrec body做压缩*/
+int __wt_log_write(WT_SESSION_IMPL *session, WT_ITEM *record, WT_LSN *lsnp, uint32_t flags)
+{
+	WT_COMPRESSOR *compressor;
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_ITEM(citem);
+	WT_DECL_RET;
+	WT_ITEM *ip;
+	WT_LOG *log;
+	WT_LOG_RECORD *complrp;
+	int compression_failed;
+	size_t len, src_len, dst_len, result_len, size;
+	uint8_t *src, *dst;
+
+	conn = S2C(session);
+	log = conn->log;
+
+	/*log正在写的文件句柄为NULL，不能写*/
+	if(log->log_fh == NULL)
+		return 0;
+
+	ip = record;
+	if ((compressor = conn->log_compressor) != NULL && record->size < log->allocsize)
+		WT_STAT_FAST_CONN_INCR(session, log_compress_small);
+	else if(compressor != NULL){
+		src = (uint8_t *)record->mem + WT_LOG_COMPRESS_SKIP;
+		src_len = record->size - WT_LOG_COMPRESS_SKIP;
+
+		/*进行日志数据压缩后数据长度的确定*/
+		if (compressor->pre_size == NULL)
+			len = src_len;
+		else
+			WT_ERR(compressor->pre_size(compressor, &session->iface, src, src_len, &len));
+
+		size = len + WT_LOG_COMPRESS_SKIP;
+		WT_ERR(__wt_scr_alloc(session, size, &citem));
+
+		/* Skip the header bytes of the destination data. */
+		dst = (uint8_t *)citem->mem + WT_LOG_COMPRESS_SKIP;
+		dst_len = len;
+		/*进行数据压缩*/
+		compression_failed = 0;
+		WT_ERR(compressor->compress(compressor, &session->iface, src, src_len, dst, dst_len, &result_len, &compression_failed));
+
+		result_len += WT_LOG_COMPRESS_SKIP;
+
+		/*压缩失败或者压缩后的数据比压缩前的数据还大，不采用压缩数据*/
+		if (compression_failed || result_len / log->allocsize >= record->size / log->allocsize)
+			WT_STAT_FAST_CONN_INCR(session, log_compress_write_fails);
+		else {
+			/*统计信息计数*/
+			WT_STAT_FAST_CONN_INCR(session, log_compress_writes);
+			WT_STAT_FAST_CONN_INCRV(session, log_compress_mem, record->size);
+			WT_STAT_FAST_CONN_INCRV(session, log_compress_len, result_len);
+
+			/*将压缩的数据替换掉未压缩的数据进行日志写*/
+			memcpy(citem->mem, record->mem, WT_LOG_COMPRESS_SKIP);
+			citem->size = result_len;
+			ip = citem;
+			complrp = (WT_LOG_RECORD *)citem->mem;
+			F_SET(complrp, WT_LOG_RECORD_COMPRESSED);
+			WT_ASSERT(session, result_len < UINT32_MAX &&
+			    record->size < UINT32_MAX);
+			complrp->len = WT_STORE_SIZE(result_len);
+			complrp->mem_len = WT_STORE_SIZE(record->size);
+		}
+	}
+	/*日志写入*/
+	ret = __log_write_internal(session, ip, lsnp, flags);
+
+err:
+	__wt_scr_free(session, &citem);
+	return ret;
+}
+
+static int __log_write_internal(WT_SESSION_IMPL* session, WT_ITEM* record, WT_LSN* lsnp, uint32_t flags)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+	WT_LOG *log;
+	WT_LOG_RECORD *logrec;
+	WT_LSN lsn;
+	WT_MYSLOT myslot;
+	uint32_t rdup_len;
+	int free_slot, locked;
+
+	conn = S2C(session);
+	log = conn->log;
+	free_slot = locked = 0;
+	WT_INIT_LSN(&lsn);
+	myslot.slot = NULL;
+
+	WT_STAT_FAST_CONN_INCRV(session, log_bytes_payload, record->size);
+
+	/*确定logrec对齐的长度,并分配对齐长度的buf*/
+	rdup_len = __wt_rduppo2((uint32_t)record->size, log->allocsize);
+
+	WT_ERR(__wt_buf_grow(session, record, rdup_len));
+	WT_ASSERT(session, record->data == record->mem);
+
+	if (record->size != rdup_len) {
+		memset((uint8_t *)record->mem + record->size, 0, rdup_len - record->size);
+		record->size = rdup_len;
+	}
+
+	/*计算checksum*/
+	logrec = (WT_LOG_RECORD *)record->mem;
+	logrec->len = (uint32_t)record->size;
+	logrec->checksum = 0;
+	logrec->checksum = __wt_cksum(logrec, record->size);
+
+	WT_STAT_FAST_CONN_INCR(session, log_writes);
+	/*强制刷盘模式,不做小IO合并,类似innodb commit_trx = 1的模式*/
+	if(!F_ISSET(log, WT_LOG_FORCE_CONSOLIDATE)){
+		ret = __log_direct_write(session, record, lsnp, flags);
+		if (ret == 0)
+			return 0;
+
+		if (ret != EAGAIN)
+			WT_ERR(ret);
+	}
+
+	F_SET(log, WT_LOG_FORCE_CONSOLIDATE);
+	/*获取一个slot和这次log数据写的位置,有可能会spin wait*/
+	if ((ret = __wt_log_slot_join(session, rdup_len, flags, &myslot)) == ENOMEM){
+		/*如果短时间无法JION SLOT,采用直接写方式*/
+		while((ret = __log_direct_write(session, record, lsnp, flags)) == EAGAIN)
+			;
+
+		WT_ERR(ret);
+		/*无法join slot，可能slot buffer比较小，尝试扩大它，为了下一次更容易join*/
+		WT_ERR(__wt_log_slot_grow_buffers(session, 4 * rdup_len));
+		return 0;
+	}
+
+	WT_ERR(ret);
+
+	/*这段并发控制非常复杂，注意！！！！*/
+	if (myslot.offset == 0) {
+		__wt_spin_lock(session, &log->log_slot_lock);
+		locked = 1;
+		WT_ERR(__wt_log_slot_close(session, myslot.slot));
+		WT_ERR(__log_acquire(session, myslot.slot->slot_group_size, myslot.slot));
+
+		__wt_spin_unlock(session, &log->log_slot_lock);
+		locked = 0;
+
+		WT_ERR(__wt_log_slot_notify(session, myslot.slot));
+	} 
+	else
+		WT_ERR(__wt_log_slot_wait(session, myslot.slot));
+
+	WT_ERR(__log_fill(session, &myslot, 0, record, &lsn));
+
+	if (__wt_log_slot_release(myslot.slot, rdup_len) == WT_LOG_SLOT_DONE) {
+		WT_ERR(__log_release(session, myslot.slot, &free_slot));
+		if (free_slot)
+			WT_ERR(__wt_log_slot_free(session, myslot.slot));
+	} 
+	else if (LF_ISSET(WT_LOG_FSYNC)) {
+		/* Wait for our writes to reach disk */
+		while (LOG_CMP(&log->sync_lsn, &lsn) <= 0 &&
+			myslot.slot->slot_error == 0)
+			(void)__wt_cond_wait(session, log->log_sync_cond, 10000);
+	} 
+	else if (LF_ISSET(WT_LOG_FLUSH)) {
+		/* Wait for our writes to reach the OS */
+		while (LOG_CMP(&log->write_lsn, &lsn) <= 0 && myslot.slot->slot_error == 0)
+			(void)__wt_cond_wait(session, log->log_write_cond, 10000);
+	}
+err:
+	if (locked)
+		__wt_spin_unlock(session, &log->log_slot_lock);
+
+	if (ret == 0 && lsnp != NULL)
+		*lsnp = lsn;
+
+	if (LF_ISSET(WT_LOG_DSYNC | WT_LOG_FSYNC) && ret == 0 && myslot.slot != NULL)
+		ret = myslot.slot->slot_error;
+
+	return ret;
+}
+
+/*logrec的格式化构建,并写入到log文件中*/
+int __wt_log_vprintf(WT_SESSION_IMPL *session, const char *fmt, va_list ap)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_ITEM(logrec);
+	WT_DECL_RET;
+	va_list ap_copy;
+	const char *rec_fmt = WT_UNCHECKED_STRING(I);
+	uint32_t rectype = WT_LOGREC_MESSAGE;
+	size_t header_size, len;
+
+	conn = S2C(session);
+
+	if (!FLD_ISSET(conn->log_flags, WT_CONN_LOG_ENABLED))
+		return (0);
+
+	va_copy(ap_copy, ap);
+	len = (size_t)vsnprintf(NULL, 0, fmt, ap_copy) + 1;
+	va_end(ap_copy);
+
+	WT_RET(__wt_logrec_alloc(session, sizeof(WT_LOG_RECORD) + len, &logrec));
+
+	/*
+	 * We're writing a record with the type (an integer) followed by a
+	 * string (NUL-terminated data).  To avoid writing the string into
+	 * a buffer before copying it, we write the header first, then the
+	 * raw bytes of the string.
+	 */
+	WT_ERR(__wt_struct_size(session, &header_size, rec_fmt, rectype));
+	WT_ERR(__wt_struct_pack(session, (uint8_t *)logrec->data + logrec->size, header_size, rec_fmt, rectype));
+	logrec->size += (uint32_t)header_size;
+
+	(void)vsnprintf((char *)logrec->data + logrec->size, len, fmt, ap);
+
+	WT_ERR(__wt_verbose(session, WT_VERB_LOG, "log_printf: %s", (char *)logrec->data + logrec->size));
+
+	logrec->size += len;
+	WT_ERR(__wt_log_write(session, logrec, NULL, 0));
+err:	
+	__wt_scr_free(session, &logrec);
 	return ret;
 }
 
