@@ -1393,8 +1393,7 @@ static int __log_write_internal(WT_SESSION_IMPL* session, WT_ITEM* record, WT_LS
 	} 
 	else if (LF_ISSET(WT_LOG_FSYNC)) {
 		/* Wait for our writes to reach disk */
-		while (LOG_CMP(&log->sync_lsn, &lsn) <= 0 &&
-			myslot.slot->slot_error == 0)
+		while (LOG_CMP(&log->sync_lsn, &lsn) <= 0 && myslot.slot->slot_error == 0)
 			(void)__wt_cond_wait(session, log->log_sync_cond, 10000);
 	} 
 	else if (LF_ISSET(WT_LOG_FLUSH)) {
