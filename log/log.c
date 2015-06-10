@@ -1453,6 +1453,7 @@ int __wt_log_vprintf(WT_SESSION_IMPL *session, const char *fmt, va_list ap)
 
 	logrec->size += len;
 	WT_ERR(__wt_log_write(session, logrec, NULL, 0));
+
 err:	
 	__wt_scr_free(session, &logrec);
 	return ret;
