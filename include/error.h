@@ -31,6 +31,13 @@
 		ret = 0;										\
 }while(0)
 
+/*执行a操作，并判断返回值是否是EBUSY，如果不是EBUSY，则goto err*/
+#define	WT_ERR_BUSY_OK(a) WT_ERR_TEST((ret = (a)) != 0 && ret != EBUSY, ret)
+
+/*执行a操作，并判断返回值是否是EBUSY，如果不是WT_NOTFOUND，则goto err*/
+#define	WT_ERR_NOTFOUND_OK(a)							\
+	WT_ERR_TEST((ret = (a)) != 0 && ret != WT_NOTFOUND, ret)
+
 /*执行a，如果a执行返回失败，直接return a执行的结果*/
 #define WT_RET(a) do{									\
 	int __ret;											\

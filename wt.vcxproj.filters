@@ -40,6 +40,9 @@
     <Filter Include="c\log">
       <UniqueIdentifier>{b554346b-6c52-4e96-820e-50f56c3b56a1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\config">
+      <UniqueIdentifier>{8528b677-3008-4c60-9ae1-bb226035f2d1}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -215,6 +218,30 @@
     </ClCompile>
     <ClCompile Include="log\log.c">
       <Filter>c\log</Filter>
+    </ClCompile>
+    <ClCompile Include="config\config_def.c">
+      <Filter>c\config</Filter>
+    </ClCompile>
+    <ClCompile Include="config\config_upgrade.c">
+      <Filter>c\config</Filter>
+    </ClCompile>
+    <ClCompile Include="config\config_api.c">
+      <Filter>c\config</Filter>
+    </ClCompile>
+    <ClCompile Include="config\config_concat.c">
+      <Filter>c\config</Filter>
+    </ClCompile>
+    <ClCompile Include="config\config_ext.c">
+      <Filter>c\config</Filter>
+    </ClCompile>
+    <ClCompile Include="config\config_collapse.c">
+      <Filter>c\config</Filter>
+    </ClCompile>
+    <ClCompile Include="config\config_check.c">
+      <Filter>c\config</Filter>
+    </ClCompile>
+    <ClCompile Include="config\config.c">
+      <Filter>c\config</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

@@ -188,6 +188,10 @@ struct __wt_connection_impl
 	WT_CONDVAR*						ckpt_cond;		/* Checkpoint wait mutex */
 	const char*						ckpt_config;	/* Checkpoint configuration */
 
+	wt_off_t						ckpt_logsize;	/**/
+	uint32_t						ckpt_signalled;
+	uint64_t						ckpt_usecs;
+
 	int								compact_in_memory_pass;	/* Compaction serialization */
 
 	uint32_t						stat_flags;

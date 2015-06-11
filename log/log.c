@@ -79,10 +79,8 @@ void __wt_log_written_reset(WT_SESSION_IMPL *session)
 	if(!FLD_ISSET(conn->log_flags, WT_CONN_LOG_ENABLED))
 		return ;
 
-	log = con->log;
+	log = conn->log;
 	log->log_written = 0;
-
-	return 0;
 }
 
 /*通过一个前缀匹配符，找出所有相关的日志文件名*/
@@ -116,7 +114,7 @@ int __wt_log_get_all_files(WT_SESSION_IMPL *session, char ***filesp, u_int *coun
 
 	*maxid = 0;
 	/*此处会分配内存，如果异常，需要释放*/
-	WT_RET(__log_get_files(session, WT_LOG_FILENAME, &filesp, &count));
+	WT_RET(__log_get_files(session, WT_LOG_FILENAME, &files, &count));
 
 	/*过滤掉所有小于checkpoint LSN的文件*/
 	for(max = 0, i = 0; i < count;){
@@ -255,7 +253,7 @@ static int __log_acquire(WT_SESSION_IMPL* session, uint64_t recsize, WT_LOGSLOT*
 }
 
 /*对logrec的数据解压缩,这个函数会分配内存*/
-static int __log_decompress(WT_SESSION_IMPL session*, WT_ITEM* in, WT_ITEM** out)
+static int __log_decompress(WT_SESSION_IMPL* session, WT_ITEM* in, WT_ITEM** out)
 {
 	WT_COMPRESSOR *compressor;
 	WT_CONNECTION_IMPL *conn;
@@ -285,14 +283,14 @@ static int __log_decompress(WT_SESSION_IMPL session*, WT_ITEM* in, WT_ITEM** out
 		(uint8_t *)(*out)->mem + skip,
 		uncompressed_size - skip, &result_len));
 
-	if(ret != 0 || result_len != uncompressed_size - WT_LOG__COMPRESS_SKIP)
+	if(ret != 0 || result_len != uncompressed_size - WT_LOG_COMPRESS_SKIP)
 		WT_ERR(WT_ERROR);
 
 err:
 	return ret;
 }
 
-/*log(record部分)数据写入*/
+/*logrec数据写入，有direct标识确定写入到slot buffer也有可能直接写入file page cache中*/
 static int __log_fill(WT_SESSION_IMPL* session, WT_MYSLOT* myslot, int direct, WT_ITEM* record, WT_LSN* lsnp)
 {
 	WT_DECL_RET;
@@ -321,7 +319,7 @@ err:
 	return ret;
 }
 
-/*构造日志头（logrec header）并写入日志文件(WT_FH)中*/
+/*构造日志头（log header）并写入日志文件(WT_FH)中*/
 static int __log_file_header(WT_SESSION_IMPL* session, WT_FH* fh, WT_LSN* end_lsn, int prealloc)
 {
 	WT_CONNECTION_IMPL *conn;
@@ -773,7 +771,7 @@ static int __log_release(WT_SESSION_IMPL* session, WT_LOGSLOT* slot, int* freep)
 
 	/*修改统计信息*/
 	WT_STAT_FAST_CONN_INCR(session, log_release_write_lsn);
-	/*判断write lsn是否达到release lsn的位置，如果达到，进行write_lsn的更新*/
+	/*判断write lsn是否达到release lsn的位置，如果达到，进行write_lsn的更新,有可能前面的slot数据还没有写入，必须等待前面slot写入OS层*/
 	while (LOG_CMP(&log->write_lsn, &slot->slot_release_lsn) != 0) {
 		if (++yield_count < 1000)
 			__wt_yield();
@@ -1362,7 +1360,7 @@ static int __log_write_internal(WT_SESSION_IMPL* session, WT_ITEM* record, WT_LS
 			;
 
 		WT_ERR(ret);
-		/*无法join slot，可能slot buffer比较小，尝试扩大它，为了下一次更容易join*/
+		/*无法join slot，可能slot buffer比较小，尝试扩大它，为了下一次更容易join,这个函数会占用slot_spin_lock*/
 		WT_ERR(__wt_log_slot_grow_buffers(session, 4 * rdup_len));
 		return 0;
 	}
@@ -1371,36 +1369,43 @@ static int __log_write_internal(WT_SESSION_IMPL* session, WT_ITEM* record, WT_LS
 
 	/*这段并发控制非常复杂，注意！！！！*/
 	if (myslot.offset == 0) {
+		/*说明本次写是slot第一个写操作，需要将slot从ready状态转到WT_LOG_SLOT_PENDING状态,
+		 *这个spin lock是防止其他线程也同时更改log slot的状态信息*/
 		__wt_spin_lock(session, &log->log_slot_lock);
 		locked = 1;
 		WT_ERR(__wt_log_slot_close(session, myslot.slot));
+		/*设置slot的start lsn等信息*/
 		WT_ERR(__log_acquire(session, myslot.slot->slot_group_size, myslot.slot));
 
 		__wt_spin_unlock(session, &log->log_slot_lock);
 		locked = 0;
 
+		/*将slot置为writting状态，并设置需要写的数据长度*/
 		WT_ERR(__wt_log_slot_notify(session, myslot.slot));
 	} 
-	else
+	else/*说明slot的第一个位置的write操作还未开始，需要进行等待第一个操作开始，才能进行*/
 		WT_ERR(__wt_log_slot_wait(session, myslot.slot));
 
+	/*将数据写入到slot buffer中，这个操作可以多线程同时进行,因为各自的位置是不重叠的,这个时候数据并没有落盘*/
 	WT_ERR(__log_fill(session, &myslot, 0, record, &lsn));
 
+	/*进行日志落盘,如果本线程的写正好将slot的最后一个写，那么它就会对日志SYNC落盘*/
 	if (__wt_log_slot_release(myslot.slot, rdup_len) == WT_LOG_SLOT_DONE) {
 		WT_ERR(__log_release(session, myslot.slot, &free_slot));
 		if (free_slot)
 			WT_ERR(__wt_log_slot_free(session, myslot.slot));
 	} 
-	else if (LF_ISSET(WT_LOG_FSYNC)) {
+	else if (LF_ISSET(WT_LOG_FSYNC)) { /*slot虽然没有完全写完，但是日志要求必须落盘操作，线程必须等log sync完成，再退出*/
 		/* Wait for our writes to reach disk */
 		while (LOG_CMP(&log->sync_lsn, &lsn) <= 0 && myslot.slot->slot_error == 0)
 			(void)__wt_cond_wait(session, log->log_sync_cond, 10000);
 	} 
-	else if (LF_ISSET(WT_LOG_FLUSH)) {
+	else if (LF_ISSET(WT_LOG_FLUSH)) { /*如果log要求日志数据必须写入到OS FILE PAGE CACHE中才算有效，那么必须等log_write_cond完成才退出*/
 		/* Wait for our writes to reach the OS */
 		while (LOG_CMP(&log->write_lsn, &lsn) <= 0 && myslot.slot->slot_error == 0)
 			(void)__wt_cond_wait(session, log->log_write_cond, 10000);
 	}
+
 err:
 	if (locked)
 		__wt_spin_unlock(session, &log->log_slot_lock);

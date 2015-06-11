@@ -81,6 +81,14 @@
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="config\config.c" />
+    <ClCompile Include="config\config_api.c" />
+    <ClCompile Include="config\config_check.c" />
+    <ClCompile Include="config\config_collapse.c" />
+    <ClCompile Include="config\config_concat.c" />
+    <ClCompile Include="config\config_def.c" />
+    <ClCompile Include="config\config_ext.c" />
+    <ClCompile Include="config\config_upgrade.c" />
     <ClCompile Include="cursor\cur_json.c" />
     <ClCompile Include="log\log.c" />
     <ClCompile Include="log\log_auto.c" />

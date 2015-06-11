@@ -18,10 +18,11 @@ struct __wt_config_check
 	const char*					name;
 	const char*					type;
 
-	const char*					checks;
-	const WT_CONFIG_CHECK*		subconfigs;
 
 	int							(*checkf)(WT_SESSION_IMPL *, WT_CONFIG_ITEM *);
+
+	const char*					checks;
+	const WT_CONFIG_CHECK*		subconfigs;
 	u_int						subconfigs_entries;
 };
 
@@ -31,6 +32,7 @@ struct __wt_config_check
 
 struct __wt_config_entry
 {
+	const char*					method;
 	const char*					base;
 	const WT_CONFIG_CHECK*		checks;
 	u_int						checks_entries;
