@@ -333,7 +333,7 @@ static WT_THREAD_RET __log_wrlsn_server(void* arg)
 
 		if (written_i > 0) {
 			yield = 0;
-			/*按LSN由小到大排序*/
+			/*按LSN由小到大排序,因为要按slot进行数据刷盘*/
 			qsort(written, written_i, sizeof(WT_LOG_WRLSN_ENTRY), __log_wrlsn_cmp);
 			/*
 			 * We know the written array is sorted by LSN.  Go
