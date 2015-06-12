@@ -16,6 +16,7 @@ FILE(GLOB support_c "../../support/*.c")
 FILE(GLOB cursor_c "../../cursor/*.c")
 FILE(GLOB packing_c "../../packing/*.c")
 FILE(GLOB log_c "../../log/*.c")
+FILE(GLOB config_c "../../config/*.c")
 
 # targets
-ADD_LIBRARY (wt STATIC ${sources_c} ${support_c} ${cursor_c} ${packing_c} ${log_c})
+ADD_LIBRARY (wt STATIC ${sources_c} ${support_c} ${cursor_c} ${packing_c} ${log_c} ${config_c})

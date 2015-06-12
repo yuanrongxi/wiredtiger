@@ -447,7 +447,7 @@ static int __config_process_value(WT_CONFIG* conf, WT_CONFIG_ITEM* value)
 
 	return 0;
 
-err:
+range:
 	/*写入一个错误信息到stderr中*/
 	return __config_err(conf, "Number out of range", ERANGE);
 }

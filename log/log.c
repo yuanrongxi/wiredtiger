@@ -221,7 +221,7 @@ static int __log_acquire(WT_SESSION_IMPL* session, uint64_t recsize, WT_LOGSLOT*
 
 	slot->slot_release_lsn = log->alloc_lsn;
 
-	/*如果当前alloc_lsn对应的文件剩余空间无法存下recsize大小的数据，
+	/*如果当前alloc_lsn对应的文件剩余空间无法存下recsize大小的数据，将slot设置为slot closeFH状态，提示close fh线程进行文件刷盘并关闭
 	 *需要新建一个新的log file来保存，这有可能会涉及到递归调用
 	 *__wt_log_newfile->__wt_log_allocfile->__log_file_header->__log_acquire*/
 	if(!__log_size_fit(session, &log->alloc_lsn, recsize)){
@@ -759,11 +759,11 @@ static int __log_release(WT_SESSION_IMPL* session, WT_LOGSLOT* slot, int* freep)
 		WT_ERR(__wt_write(session, slot->slot_fh, slot->slot_start_offset, write_size, slot->slot_buf.mem));
 	}
 
-	/*slot是一个dummy slot，不是buffer缓冲数据的slot,这个过程无需回收slot到slot pool中*/
+	/*log 数据只是存储在log file buffer中，但不会做数据的sync，这个时候需要统一有wrlsn thread去更新log->write_lsn*/
 	if(F_ISSET(slot, SLOT_BUFFERED) && !F_ISSET(slot, SLOT_SYNC | SLOT_SYNC_DIR)){
 		*freep = 0;
 		slot->slot_state = WT_LOG_SLOT_WRITTEN;
-
+		/*有wrsln thread进行对log->write_lsn进行更新*/
 		WT_ERR(__wt_cond_signal(session, conn->log_wrlsn_cond));
 
 		goto done;

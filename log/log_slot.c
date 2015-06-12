@@ -129,7 +129,7 @@ join_slot:
 	/*更新joins的统计信息*/
 	WT_STAT_FAST_CONN_INCR(session, log_slot_joins);
 
-	/*确定fsync的方式*/
+	/*确定fsync的方式，DIRECT IO或者page cache sync*/
 	if (LF_ISSET(WT_LOG_DSYNC | WT_LOG_FSYNC))
 		F_SET(slot, SLOT_SYNC_DIR);
 

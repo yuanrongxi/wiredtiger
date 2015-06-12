@@ -43,6 +43,9 @@
     <Filter Include="c\config">
       <UniqueIdentifier>{8528b677-3008-4c60-9ae1-bb226035f2d1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\conn">
+      <UniqueIdentifier>{6b428717-2c3a-41c8-b5c5-c330be14f93b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -242,6 +245,9 @@
     </ClCompile>
     <ClCompile Include="config\config.c">
       <Filter>c\config</Filter>
+    </ClCompile>
+    <ClCompile Include="conn\conn_log.c">
+      <Filter>c\conn</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

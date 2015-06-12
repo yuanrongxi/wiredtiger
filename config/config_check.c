@@ -205,9 +205,9 @@ static int config_check(WT_SESSION_IMPL *session, const WT_CONFIG_CHECK *checks,
 	int badtype, found, i;
 
 	/*
-	 * The config_len parameter is optional, and allows passing in strings
-	 * that are not nul-terminated.
-	 */
+	* The config_len parameter is optional, and allows passing in strings
+	* that are not nul-terminated.
+	*/
 	if (config_len == 0)
 		WT_RET(__wt_config_init(session, &parser, config));
 	else
@@ -239,7 +239,7 @@ static int config_check(WT_SESSION_IMPL *session, const WT_CONFIG_CHECK *checks,
 		} 
 		else if (strcmp(checks[i].type, "list") == 0) {
 			badtype = (v.len > 0 &&
-			    v.type != WT_CONFIG_ITEM_STRUCT);
+				v.type != WT_CONFIG_ITEM_STRUCT);
 		} 
 		else if (strcmp(checks[i].type, "string") == 0) {
 			badtype = 0;
@@ -268,34 +268,35 @@ static int config_check(WT_SESSION_IMPL *session, const WT_CONFIG_CHECK *checks,
 			else if (WT_STRING_MATCH("max", ck.str, ck.len)) {
 				if (v.val > cv.val){
 					WT_RET_MSG(session, EINVAL, "Value too large for key '%.*s' the maximum is %.*s",
-					    (int)k.len, k.str, (int)cv.len, cv.str);
-			} 
-			else if (WT_STRING_MATCH("choices", ck.str, ck.len)) {
-				if (v.len == 0)
-					WT_RET_MSG(session, EINVAL, "Key '%.*s' requires a value", (int)k.len, k.str);
+						(int)k.len, k.str, (int)cv.len, cv.str);
+				} 
+				else if (WT_STRING_MATCH("choices", ck.str, ck.len)) {
+					if (v.len == 0)
+						WT_RET_MSG(session, EINVAL, "Key '%.*s' requires a value", (int)k.len, k.str);
 
-				if (v.type == WT_CONFIG_ITEM_STRUCT) {
-					found = 1;
-					WT_RET(__wt_config_subinit(session, &sparser, &v));
-					while (found && (ret = __wt_config_next(&sparser, &v, &dummy)) == 0) {
+					if (v.type == WT_CONFIG_ITEM_STRUCT) {
+						found = 1;
+						WT_RET(__wt_config_subinit(session, &sparser, &v));
+						while (found && (ret = __wt_config_next(&sparser, &v, &dummy)) == 0) {
+							ret = __wt_config_subgetraw(session, &cv, &v, &dummy);
+							found = (ret == 0);
+						}
+					} 
+					else{
 						ret = __wt_config_subgetraw(session, &cv, &v, &dummy);
 						found = (ret == 0);
 					}
+
+					if (ret != 0 && ret != WT_NOTFOUND)
+						return (ret);
+
+					if (!found)
+						WT_RET_MSG(session, EINVAL, "Value '%.*s' not a permitted choice for key '%.*s'",
+						(int)v.len, v.str, (int)k.len, k.str);
 				} 
-				else{
-					ret = __wt_config_subgetraw(session, &cv, &v, &dummy);
-					found = (ret == 0);
-				}
-
-				if (ret != 0 && ret != WT_NOTFOUND)
-					return (ret);
-
-				if (!found)
-					WT_RET_MSG(session, EINVAL, "Value '%.*s' not a permitted choice for key '%.*s'",
-					    (int)v.len, v.str, (int)k.len, k.str);
-			} 
-			else
-				WT_RET_MSG(session, EINVAL, "unexpected configuration description keyword %.*s", (int)ck.len, ck.str);
+				else
+					WT_RET_MSG(session, EINVAL, "unexpected configuration description keyword %.*s", (int)ck.len, ck.str);
+			}
 		}
 	}
 
