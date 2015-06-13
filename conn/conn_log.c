@@ -173,7 +173,7 @@ static int __log_prealloc_once(WT_SESSION_IMPL* session)
 
 	WT_STAT_FAST_CONN_SET(session, log_prealloc_max, conn->log_prealloc);
 	/*建立预分配日志文件*/
-	for (i = reccount; i < (u_int)conn->log_prealloc; i++) {
+	for (i = reccount; i < (u_int)(conn->log_prealloc); i++) {
 		WT_ERR(__wt_log_allocfile(session, ++log->prep_fileid, WT_LOG_PREPNAME, 1));
 		WT_STAT_FAST_CONN_INCR(session, log_prealloc_files);
 	}
@@ -297,7 +297,7 @@ static int WT_CDECL __log_wrlsn_cmp(const void *a, const void *b)
 	return LOG_CMP(&ae->lsn, &be->lsn);
 }
 
-/**/
+/*只是处理SLOT_BUFFERED且不主动的fsync的模式*/
 static WT_THREAD_RET __log_wrlsn_server(void* arg)
 {
 	WT_CONNECTION_IMPL *conn;
@@ -332,6 +332,7 @@ static WT_THREAD_RET __log_wrlsn_server(void* arg)
 		}
 
 		if (written_i > 0) {
+			/*触发一次，表示后续可能很多这样的操作，所以讲yield进行操作*/
 			yield = 0;
 			/*按LSN由小到大排序,因为要按slot进行数据刷盘*/
 			qsort(written, written_i, sizeof(WT_LOG_WRLSN_ENTRY), __log_wrlsn_cmp);
@@ -349,7 +350,7 @@ static WT_THREAD_RET __log_wrlsn_server(void* arg)
 				 */
 				slot = &log->slot_pool[written[i].slot_index];
 				WT_ASSERT(session, LOG_CMP(&written[i].lsn, &slot->slot_release_lsn) == 0);
-				
+				/*更新WRITE LSN*/
 				log->write_lsn = slot->slot_end_lsn;
 				WT_ERR(__wt_cond_signal(session,log->log_write_cond));
 
@@ -376,8 +377,218 @@ static WT_THREAD_RET __log_wrlsn_server(void* arg)
 
 err:
 	__wt_err(session, ret, "log wrlsn server error");
+
 	return WT_THREAD_RET_VALUE;
 }
+
+/*一个专门删除已经建立checkpoint的日志文件，一般1000触发一次*/
+static WT_THREAD_RET __log_server(void* arg)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+	WT_LOG *log;
+	WT_SESSION_IMPL *session;
+	u_int locked;
+
+	session = (WT_SESSION_IMPL *)arg;
+	conn = S2C(session);
+	log = conn->log;
+	locked = 0;
+
+	while(F_ISSET(conn, WT_CONN_LOG_SERVER_RUN)){
+		/*进行预分配日志文件*/
+		if (conn->log_prealloc > 0)
+			WT_ERR(__log_prealloc_once(session));
+
+		if(FLD_ISSET(conn->log_flags, WT_CONN_LOG_ARCHIVE)){
+			/*删除已经checkpoint的日志文件,注意：其实WT整个引擎很少发生对log_archive_lock竞争，所以即使使用spin lock也消耗不大*/
+			if(__wt_try_writelock(session, log->log_archive_lock) == 0){
+				locked = 1;
+				WT_ERR(__log_archive_once(session, 0));
+				WT_ERR(	__wt_writeunlock(session, log->log_archive_lock));
+				locked = 0;
+			}
+			else{
+				WT_ERR(__wt_verbose(session, WT_VERB_LOG, "log_archive: Blocked due to open log cursor holding archive lock"));
+			}
+		}
+		
+		WT_ERR(__wt_cond_wait(session, conn->log_cond, WT_MILLION)); /*1000秒*/
+	}
+	return WT_THREAD_RET_VALUE;
+
+err:
+	__wt_err(session, ret, "log server error");
+	if (locked)
+		(void)__wt_writeunlock(session, log->log_archive_lock);
+
+	return WT_THREAD_RET_VALUE;
+}
+
+/*初始化wiredtiger的日志系统*/
+int __wt_logmgr_create(WT_SESSION_IMPL *session, const char *cfg[])
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_LOG *log;
+	int run;
+
+	conn = S2C(session);
+
+	/*读取日志文件的配置文件*/
+	WT_RET(__logmgr_config(session, cfg, &run));
+
+	if(!run)
+		return 0;
+
+	/*设置日志的启动模式*/
+	FLD_SET(conn->log_flags, WT_CONN_LOG_ENABLED);
+
+	WT_RET(__wt_calloc_one(session, &conn->log));
+	log = conn->log;
+	/*初始化各个日志spin lock*/
+	WT_RET(__wt_spin_init(session, &log->log_lock, "log"));
+	WT_RET(__wt_spin_init(session, &log->log_slot_lock, "log slot"));
+	WT_RET(__wt_spin_init(session, &log->log_sync_lock, "log sync"));
+	WT_RET(__wt_rwlock_alloc(session, &log->log_archive_lock, "log archive lock"));
+	/*设置日志记录数据的对齐长度*/
+	if (FLD_ISSET(conn->direct_io, WT_FILE_TYPE_LOG))
+		log->allocsize = WT_MAX((uint32_t)conn->buffer_alignment, LOG_ALIGN);
+	else
+		log->allocsize = LOG_ALIGN;
+
+	/*初始化各种LSN*/
+	WT_INIT_LSN(&log->alloc_lsn);
+	WT_INIT_LSN(&log->ckpt_lsn);
+	WT_INIT_LSN(&log->first_lsn);
+	WT_INIT_LSN(&log->sync_lsn);
+
+	WT_ZERO_LSN(&log->sync_dir_lsn);
+	WT_INIT_LSN(&log->trunc_lsn);
+	WT_INIT_LSN(&log->write_lsn);
+
+	log->fileid = 0;
+	WT_RET(__wt_cond_alloc(session, "log sync", 0, &log->log_sync_cond));
+	WT_RET(__wt_cond_alloc(session, "log write", 0, &log->log_write_cond));
+	WT_RET(__wt_log_open(session));
+	WT_RET(__wt_log_slot_init(session));
+
+	return 0;
+}
+
+/*启动wiredtiger日志系统*/
+int __wt_logmgr_open(WT_SESSION_IMPL *session)
+{
+	WT_CONNECTION_IMPL *conn;
+
+	conn = S2C(session);
+
+	if(!FLD_ISSET(conn->log_flags, WT_CONN_LOG_ENABLED))
+		return 0;
+
+	/*为日志系统分配一个log close session,启动一个log close session*/
+	WT_RET(__wt_open_internal_session(conn, "log-close-server", 0, 0, &conn->log_close_session));
+	WT_RET(__wt_cond_alloc(conn->log_close_session,"log close server", 0, &conn->log_close_cond));
+	WT_RET(__wt_thread_create(conn->log_close_session, &conn->log_close_tid, __log_close_server, conn->log_close_session));
+	conn->log_close_tid_set = 1;
+
+	/*创建一个wrlsn的session,并启动一个wrlsn thread*/
+	WT_RET(__wt_open_internal_session(conn, "log-wrlsn-server", 0, 0, &conn->log_wrlsn_session));
+	WT_RET(__wt_cond_alloc(conn->log_wrlsn_session, "log write lsn server", 0, &conn->log_wrlsn_cond));
+	WT_RET(__wt_thread_create(conn->log_wrlsn_session, &conn->log_wrlsn_tid, __log_wrlsn_server, conn->log_wrlsn_session));
+	conn->log_wrlsn_tid_set = 1;
+
+	/*如果日志没有配置归档和预分配，则直接返回*/
+	if(!FLD_ISSET(conn->log_flags, WT_CONN_LOG_ARCHIVE | WT_CONN_LOG_PREALLOC))
+		return 0;
+
+	/*如果已经建立log_session,触发一个log_cond信号，让log_server执行一次*/
+	if (conn->log_session != NULL) {
+		WT_ASSERT(session, conn->log_cond != NULL);
+		WT_ASSERT(session, conn->log_tid_set != 0);
+		WT_RET(__wt_cond_signal(session, conn->log_cond));
+	} else {
+		/* The log server gets its own session. */
+		WT_RET(__wt_open_internal_session(conn, "log-server", 0, 0, &conn->log_session));
+		WT_RET(__wt_cond_alloc(conn->log_session, "log server", 0, &conn->log_cond));
+
+		/*启动一个__log_server线程，用于预分配日志文件和日志归档*/
+		WT_RET(__wt_thread_create(conn->log_session, &conn->log_tid, __log_server, conn->log_session));
+		conn->log_tid_set = 1;
+	}
+
+	return 0;
+}
+
+/*关闭日志系统，并进行其进行内存释放*/
+int __wt_logmgr_destroy(WT_SESSION_IMPL *session)
+{
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+	WT_SESSION *wt_session;
+
+	conn = S2C(session);
+	/*日志模块没启动*/
+	if(!FLD_ISSET(conn->log_flags, WT_CONN_LOG_ENABLED)){
+		__wt_free(session, conn->log_path);
+		return 0;
+	}
+
+	/*等待log_server线程的退出*/
+	if (conn->log_tid_set) {
+		WT_TRET(__wt_cond_signal(session, conn->log_cond));
+		WT_TRET(__wt_thread_join(session, conn->log_tid));
+		conn->log_tid_set = 0;
+	}
+	WT_TRET(__wt_cond_destroy(session, &conn->log_cond));
+
+	if (conn->log_close_tid_set) {
+		WT_TRET(__wt_cond_signal(session, conn->log_close_cond));
+		WT_TRET(__wt_thread_join(session, conn->log_close_tid));
+		conn->log_close_tid_set = 0;
+	}
+
+	WT_TRET(__wt_cond_destroy(session, &conn->log_close_cond));
+	if (conn->log_close_session != NULL) {
+		wt_session = &conn->log_close_session->iface;
+		WT_TRET(wt_session->close(wt_session, NULL));
+		conn->log_close_session = NULL;
+	}
+
+	if (conn->log_wrlsn_tid_set) {
+		WT_TRET(__wt_cond_signal(session, conn->log_wrlsn_cond));
+		WT_TRET(__wt_thread_join(session, conn->log_wrlsn_tid));
+		conn->log_wrlsn_tid_set = 0;
+	}
+	WT_TRET(__wt_cond_destroy(session, &conn->log_wrlsn_cond));
+
+	if (conn->log_wrlsn_session != NULL) {
+		wt_session = &conn->log_wrlsn_session->iface;
+		WT_TRET(wt_session->close(wt_session, NULL));
+		conn->log_wrlsn_session = NULL;
+	}
+	WT_TRET(__wt_log_close(session));
+
+	if (conn->log_session != NULL) {
+		wt_session = &conn->log_session->iface;
+		WT_TRET(wt_session->close(wt_session, NULL));
+		conn->log_session = NULL;
+	}
+
+	/*释放log对象*/
+	WT_TRET(__wt_log_slot_destroy(session));
+	WT_TRET(__wt_cond_destroy(session, &conn->log->log_sync_cond));
+	WT_TRET(__wt_cond_destroy(session, &conn->log->log_write_cond));
+	WT_TRET(__wt_rwlock_destroy(session, &conn->log->log_archive_lock));
+	__wt_spin_destroy(session, &conn->log->log_lock);
+	__wt_spin_destroy(session, &conn->log->log_slot_lock);
+	__wt_spin_destroy(session, &conn->log->log_sync_lock);
+	__wt_free(session, conn->log_path);
+	__wt_free(session, conn->log);
+
+	return ret;
+}
+
+
 
 
 
