@@ -209,6 +209,7 @@ static int __log_size_fit(WT_SESSION_IMPL* session, WT_LSN* lsn, uint64_t recsiz
 	return (lsn->offset + (wt_off_t)recsize < conn->log_file_max);
 }
 
+/*判断写入recsize的日志长度时，是否需要分配新的日志文件和建立新的checkpoint,并修改对应的slot状态*/
 static int __log_acquire(WT_SESSION_IMPL* session, uint64_t recsize, WT_LOGSLOT* slot)
 {
 	WT_CONNECTION_IMPL *conn;

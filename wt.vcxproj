@@ -73,6 +73,7 @@
     <None Include="cmake\base_test\CMakeLists.txt" />
     <None Include="cmake\CMakeLists.txt" />
     <None Include="cmake\wt\CMakeLists.txt" />
+    <None Include="include\bitstring.inl" />
     <None Include="include\buf.inl" />
     <None Include="include\intpack.inl" />
     <None Include="include\misc.inl" />
@@ -81,6 +82,7 @@
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="bloom\bloom.c" />
     <ClCompile Include="config\config.c" />
     <ClCompile Include="config\config_api.c" />
     <ClCompile Include="config\config_check.c" />
@@ -141,6 +143,7 @@
     <ClCompile Include="test\pack_test.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\bloom.h" />
     <ClInclude Include="include\config.h" />
     <ClInclude Include="include\connection.h" />
     <ClInclude Include="include\cursor.h" />
