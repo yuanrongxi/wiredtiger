@@ -241,9 +241,9 @@ typedef struct __wt_update WT_UPDATE;
 
 //#include "api.h"
 //#include "async.h"
-//#include "block.h"
+#include "block.h"
 #include "bloom.h"
-//#include "btmem.h"
+#include "btmem.h"
 //#include "btree.h"
 //#include "cache.h"
 #include "config.h"

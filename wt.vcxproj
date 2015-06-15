@@ -82,6 +82,8 @@
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="block\block_addr.c" />
+    <ClCompile Include="block\block_write.c" />
     <ClCompile Include="bloom\bloom.c" />
     <ClCompile Include="config\config.c" />
     <ClCompile Include="config\config_api.c" />
@@ -91,6 +93,7 @@
     <ClCompile Include="config\config_def.c" />
     <ClCompile Include="config\config_ext.c" />
     <ClCompile Include="config\config_upgrade.c" />
+    <ClCompile Include="conn\api_version.c" />
     <ClCompile Include="conn\conn_log.c" />
     <ClCompile Include="cursor\cur_json.c" />
     <ClCompile Include="log\log.c" />
@@ -143,7 +146,9 @@
     <ClCompile Include="test\pack_test.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\block.h" />
     <ClInclude Include="include\bloom.h" />
+    <ClInclude Include="include\btmem.h" />
     <ClInclude Include="include\config.h" />
     <ClInclude Include="include\connection.h" />
     <ClInclude Include="include\cursor.h" />

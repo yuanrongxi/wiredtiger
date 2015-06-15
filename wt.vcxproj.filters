@@ -49,6 +49,9 @@
     <Filter Include="c\bloom">
       <UniqueIdentifier>{18d883a9-3e52-4e42-8f30-eff91e25a615}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\block">
+      <UniqueIdentifier>{8c62f329-e3ec-4e4c-9ad4-e740d81f8c6b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -258,6 +261,15 @@
     <ClCompile Include="bloom\bloom.c">
       <Filter>c\bloom</Filter>
     </ClCompile>
+    <ClCompile Include="conn\api_version.c">
+      <Filter>c\conn</Filter>
+    </ClCompile>
+    <ClCompile Include="block\block_write.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
+    <ClCompile Include="block\block_addr.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
@@ -330,6 +342,12 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\bloom.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\block.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\btmem.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>
