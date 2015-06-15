@@ -1,3 +1,6 @@
+/************************************************************************
+*对block addr(offset/size/checksum)的序列化反序列化操作
+************************************************************************/
 
 #include "wt_internal.h"
 
@@ -86,6 +89,7 @@ int __wt_block_addr_string(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *b
 	return (0);
 }
 
+/*从p缓冲区读出checkpoint的信息*/
 int __wt_block_buffer_to_ckpt(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint8_t *p, WT_BLOCK_CKPT *ci)
 {
 	uint64_t a;
@@ -96,14 +100,42 @@ int __wt_block_buffer_to_ckpt(WT_SESSION_IMPL *session, WT_BLOCK *block, const u
 		WT_RET_MSG(session, WT_ERROR, "unsupported checkpoint version");
 
 	pp = &p;
+	/*从pp的缓冲区中解析出各个block addr*/
 	WT_RET(__block_buffer_to_addr(block, pp, &ci->root_offset, &ci->root_size, &ci->root_cksum));
 	WT_RET(__block_buffer_to_addr(block, pp, &ci->alloc.offset, &ci->alloc.size, &ci->alloc.cksum));
 	WT_RET(__block_buffer_to_addr(block, pp, &ci->avail.offset, &ci->avail.size, &ci->avail.cksum));
 	WT_RET(__block_buffer_to_addr(block, pp, &ci->discard.offset, &ci->discard.size, &ci->discard.cksum));
+	/*读取ci的文件长度*/
 	WT_RET(__wt_vunpack_uint(pp, 0, &a));
 	ci->file_size = (wt_off_t)a;
+	/*读取checkpoint的字节数*/
 	WT_RET(__wt_vunpack_uint(pp, 0, &a));
 	ci->ckpt_size = a;
 
 	return (0);
 }
+
+/*将ckeckpoint信息写入到pp的缓冲区中*/
+int __wt_block_ckpt_to_buffer(WT_SESSION_IMPL *session, WT_BLOCK *block, uint8_t **pp, WT_BLOCK_CKPT *ci)
+{
+	uint64_t a;
+
+	if (ci->version != WT_BM_CHECKPOINT_VERSION)
+		WT_RET_MSG(session, WT_ERROR, "unsupported checkpoint version");
+
+	(*pp)[0] = ci->version;
+	(*pp)++;
+
+	WT_RET(__wt_block_addr_to_buffer(block, pp, ci->root_offset, ci->root_size, ci->root_cksum));
+	WT_RET(__wt_block_addr_to_buffer(block, pp, ci->alloc.offset, ci->alloc.size, ci->alloc.cksum));
+	WT_RET(__wt_block_addr_to_buffer(block, pp, ci->avail.offset, ci->avail.size, ci->avail.cksum));
+	WT_RET(__wt_block_addr_to_buffer(block, pp, ci->discard.offset, ci->discard.size, ci->discard.cksum));
+
+	a = (uint64_t)ci->file_size;
+	WT_RET(__wt_vpack_uint(pp, 0, a));
+	a = (uint64_t)ci->ckpt_size;
+	WT_RET(__wt_vpack_uint(pp, 0, a));
+
+	return (0);
+}
+

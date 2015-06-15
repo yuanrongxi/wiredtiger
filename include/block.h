@@ -117,10 +117,10 @@ struct __wt_block
 
 	uint32_t				allocfirst;
 	uint32_t				allocsize;
-	size_t					os_cache;
-	size_t					os_cache_max;
-	size_t					os_cache_dirty;
-	size_t					os_cache_dirty_max;
+	size_t					os_cache;			/*当前block中在os page cache中的数据字节数*/
+	size_t					os_cache_max;		/*操作系统对文件最大的page cache的字节数*/
+	size_t					os_cache_dirty;		/*当前脏数据的字节数*/
+	size_t					os_cache_dirty_max;	/*允许最大的脏数据字节数*/
 
 	u_int					block_header;		/*block header的长度*/
 	WT_SPINLOCK				live_lock;

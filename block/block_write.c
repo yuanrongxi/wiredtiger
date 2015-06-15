@@ -139,7 +139,7 @@ extend_truncate:
 	}
 
 #ifdef HAVE_SYNC_FILE_RANGE
-	/*需要进行fsync操作*/
+	/*需要进行fsync操作,脏页太多,进行一次异步刷盘*/
 	if (block->os_cache_dirty_max != 0 && (block->os_cache_dirty += align_size) > block->os_cache_dirty_max && __wt_session_can_wait(session)) {
 			block->os_cache_dirty = 0;
 			WT_RET(__wt_fsync_async(session, fh));
