@@ -270,6 +270,24 @@
     <ClCompile Include="block\block_addr.c">
       <Filter>c\block</Filter>
     </ClCompile>
+    <ClCompile Include="block\block_mgr.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
+    <ClCompile Include="block\block_map.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
+    <ClCompile Include="block\block_session.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
+    <ClCompile Include="block\block_open.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
+    <ClCompile Include="block\block_read.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
+    <ClCompile Include="block\block_compact.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

@@ -3,6 +3,7 @@
 **************************************************************************/
 #include "wt_internal.h"
 
+/*获得block header size*/
 u_int __wt_block_header(WT_BLOCK* block)
 {
 	WT_UNUSED(block);
@@ -20,7 +21,7 @@ int __wt_block_write_size(WT_SESSION_IMPL *session, WT_BLOCK *block, size_t *siz
 	return (*sizep > UINT32_MAX - 1024 ? EINVAL : 0);
 }
 
-/*将block数据写入到buf缓冲区中*/
+/*将buffer的数据写入到block对应的文件中*/
 int __wt_block_write(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *buf, uint8_t *addr, size_t *addr_sizep, int data_cksum)
 {
 	wt_off_t offset;
@@ -37,7 +38,7 @@ int __wt_block_write(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *buf, ui
 	return 0;
 }
 
-/*将block的数据写入到buf中，并计算checksum和size*/
+/*将buffer的数据写入到block对应的文件中，并计算checksum和size*/
 int __wt_block_write_off(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *buf, wt_off_t *offsetp, 
 						uint32_t *sizep, uint32_t *cksump, int data_cksum, int caller_locked)
 {

@@ -70,7 +70,7 @@ struct __wt_session_impl
 
 	u_int					ncursors;
 
-	void*					block_manager;
+	void*					block_manager;					/*一个BLOCK WT_EXT和WT_SIZE的对象缓冲池*/
 	int	(*block_manager_cleanup)(WT_SESSION_IMPL *);
 
 	struct{

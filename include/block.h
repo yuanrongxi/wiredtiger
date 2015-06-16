@@ -32,6 +32,15 @@ struct __wt_ext
 	WT_EXT*					next[0];				/* Offset, size skiplists */
 };
 
+/*一个block size的跳表单元*/
+struct __wt_size
+{
+	wt_off_t				size;
+	uint8_t					depth;
+	WT_EXT*					off[WT_SKIP_MAXDEPTH];
+	WT_SIZE*				next[WT_SKIP_MAXDEPTH];
+};
+
 /*跳表在最高层循环*/
 #define	WT_EXT_FOREACH(skip, head)							\
 	for ((skip) = (head)[0];								\
@@ -124,10 +133,13 @@ struct __wt_block
 
 	u_int					block_header;		/*block header的长度*/
 	WT_SPINLOCK				live_lock;
+	WT_BLOCK_CKPT			live;
+
 	int						ckpt_inprogress;
 	int						compact_pct_tenths;
 
 	wt_off_t				slvg_off;
+
 	int						verify;
 	wt_off_t				verify_size;	/* Checkpoint's file size */
 	WT_EXTLIST				verify_alloc;	/* Verification allocation list */
