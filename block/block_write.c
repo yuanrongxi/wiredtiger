@@ -131,7 +131,7 @@ extend_truncate:
 	if (ret != 0) {
 		if (!caller_locked)
 			__wt_spin_lock(session, &block->live_lock);
-
+		/*没写成功，将ext对应的数据返回给avail list*/
 		WT_TRET(__wt_block_off_free(session, block, offset, (wt_off_t)align_size));
 		if (!caller_locked)
 			__wt_spin_unlock(session, &block->live_lock);

@@ -84,6 +84,7 @@
   <ItemGroup>
     <ClCompile Include="block\block_addr.c" />
     <ClCompile Include="block\block_compact.c" />
+    <ClCompile Include="block\block_ext.c" />
     <ClCompile Include="block\block_map.c" />
     <ClCompile Include="block\block_mgr.c" />
     <ClCompile Include="block\block_open.c" />

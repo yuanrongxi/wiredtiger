@@ -11,15 +11,15 @@ struct __wt_extlist
 	uint64_t				bytes;					/*字节数*/
 	uint32_t				entries;				/*实例个数，可以看着是记录条数*/
 
-	wt_off_t				offset;			
-	uint32_t				cksum;					/*extlist的checksum*/
-	uint32_t				size;					/*extlist的size*/
+	wt_off_t				offset;					/*跳表在文件中的起始位置*/
+	uint32_t				cksum;					/*extlist数据的checksum*/
+	uint32_t				size;					/*extlist的size总和*/
 	int						track_size;				/*skip list维护的数据大小*/
 
-	WT_EXT*					last;			
+	WT_EXT*					last;					/*off跳表中最后一个ext对象*/
 
-	WT_EXT*					off[WT_SKIP_MAXDEPTH];
-	WT_SIZE*				sz[WT_SKIP_MAXDEPTH];
+	WT_EXT*					off[WT_SKIP_MAXDEPTH];	/*ext skip list对象*/
+	WT_SIZE*				sz[WT_SKIP_MAXDEPTH];	/*size skip list的对象*/
 };
 
 /*跳表的单元定义*/
@@ -41,7 +41,7 @@ struct __wt_size
 	WT_SIZE*				next[WT_SKIP_MAXDEPTH];
 };
 
-/*跳表在最高层循环*/
+/*跳表在最低层循环*/
 #define	WT_EXT_FOREACH(skip, head)							\
 	for ((skip) = (head)[0];								\
 	(skip) != NULL; (skip) = (skip)->next[0])
