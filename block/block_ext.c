@@ -711,7 +711,7 @@ static int __block_merge(WT_SESSION_IMPL* session, WT_EXTLIST* el, wt_off_t off,
 	return __block_off_insert(session, el, off, size);
 }
 
-/**/
+/*读取block的avail ext对象到el中,根据el.off/el.size进行读取，但数据的长度不能超过ckpt_size*/
 int __wt_block_extlist_read_avail(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_EXTLIST *el, wt_off_t ckpt_size)
 {
 	WT_DECL_RET;
@@ -719,7 +719,7 @@ int __wt_block_extlist_read_avail(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_
 	if (el->offset == WT_BLOCK_INVALID_OFFSET)
 		return 0;
 
-	/**/
+	/*从e*/
 	WT_ERR(__wt_block_extlist_read(session, block, el, ckpt_size));
 
 	WT_ERR_NOTFOUND_OK(__wt_block_off_remove_overlap(session, el, el->offset, el->size));

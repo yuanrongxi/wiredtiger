@@ -291,6 +291,15 @@
     <ClCompile Include="block\block_ext.c">
       <Filter>c\block</Filter>
     </ClCompile>
+    <ClCompile Include="block\block_ckpt.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
+    <ClCompile Include="block\block_slvg.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
+    <ClCompile Include="block\block_vrfy.c">
+      <Filter>c\block</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
@@ -369,6 +378,9 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\btmem.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\meta.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

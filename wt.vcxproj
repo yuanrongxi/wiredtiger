@@ -83,6 +83,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="block\block_addr.c" />
+    <ClCompile Include="block\block_ckpt.c" />
     <ClCompile Include="block\block_compact.c" />
     <ClCompile Include="block\block_ext.c" />
     <ClCompile Include="block\block_map.c" />
@@ -90,6 +91,8 @@
     <ClCompile Include="block\block_open.c" />
     <ClCompile Include="block\block_read.c" />
     <ClCompile Include="block\block_session.c" />
+    <ClCompile Include="block\block_slvg.c" />
+    <ClCompile Include="block\block_vrfy.c" />
     <ClCompile Include="block\block_write.c" />
     <ClCompile Include="bloom\bloom.c" />
     <ClCompile Include="config\config.c" />
@@ -167,6 +170,7 @@
     <ClInclude Include="include\gcc.h" />
     <ClInclude Include="include\hardware.h" />
     <ClInclude Include="include\log.h" />
+    <ClInclude Include="include\meta.h" />
     <ClInclude Include="include\misc.h" />
     <ClInclude Include="include\mutex.h" />
     <ClInclude Include="include\os.h" />

@@ -1,5 +1,5 @@
 /**************************************************************************
-*定义wiredtiger的block管理接口
+*定义wiredtiger的block(表空间)管理接口
 **************************************************************************/
 #define WT_BLOCK_INVALID_OFFSET			0
 
@@ -57,10 +57,10 @@ struct __wt_size
 
 struct __wt_block_ckpt
 {
-	uint8_t					version;
-	wt_off_t				root_offset;
-	uint32_t				root_cksum;
-	uint32_t				root_size;
+	uint8_t					version;		/*block checkpoint的系统版本号*/
+	wt_off_t				root_offset;	/*block checkpoint信息起始位置偏移*/
+	uint32_t				root_cksum;		/*block checkpoint信息的checksum*/
+	uint32_t				root_size;		/*block checkpoint信息的大小*/
 
 	WT_EXTLIST				alloc;			/* Extents allocated */
 	WT_EXTLIST				avail;			/* Extents available */
@@ -116,26 +116,26 @@ struct __wt_bm {
 /*__wt_block块定义*/
 struct __wt_block
 {
-	const char*				name;
-	uint64_t				name_hash;
+	const char*				name;				/*block对应的文件名*/
+	uint64_t				name_hash;			/*文件名hash*/
 
 	uint32_t				ref;				/*对象引用计数*/
-	WT_FH*					fh;					/*备份文件的handler*/
+	WT_FH*					fh;					/*block文件的handler*/
 	SLIST_ENTRY(__wt_block) l;
 	SLIST_ENTRY(__wt_block) hashl;
 
-	uint32_t				allocfirst;
-	uint32_t				allocsize;
+	uint32_t				allocfirst;			/*从文件开始处进行写的标识*/		
+	uint32_t				allocsize;			/*文件写入对齐的长度*/
 	size_t					os_cache;			/*当前block中在os page cache中的数据字节数*/
 	size_t					os_cache_max;		/*操作系统对文件最大的page cache的字节数*/
 	size_t					os_cache_dirty;		/*当前脏数据的字节数*/
 	size_t					os_cache_dirty_max;	/*允许最大的脏数据字节数*/
 
 	u_int					block_header;		/*block header的长度*/
-	WT_SPINLOCK				live_lock;
-	WT_BLOCK_CKPT			live;
+	WT_SPINLOCK				live_lock;			/*对live的保护锁*/
+	WT_BLOCK_CKPT			live;				/*checkpoint的详细信息*/
 
-	int						ckpt_inprogress;
+	int						ckpt_inprogress;	/*是否正在进行checkpoint*/
 	int						compact_pct_tenths;
 
 	wt_off_t				slvg_off;
