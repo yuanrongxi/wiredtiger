@@ -21,13 +21,14 @@ int __wt_block_ckpt_init(WT_SESSION_IMPL *session, WT_BLOCK_CKPT *ci, const char
 	/*用WT_SIZE作为快速隐射,方便快速从avail中获得合适的ext对象*/
 	WT_RET(__wt_block_extlist_init(session, &ci->avail, name, "avail", 1));
 	WT_RET(__wt_block_extlist_init(session, &ci->discard, name, "discard", 0));
+
 	/*用WT_SIZE作为快速隐射*/
 	WT_RET(__wt_block_extlist_init(session, &ci->ckpt_avail, name, "ckpt_avail", 1));
 
 	return 0;
 }
 
-/*从block对应的文件中载入一个checkpoint信息？*/
+/*从block对应的文件中载入一个checkpoint信息,并读取avail list中的ext对象位置信息*/
 int __wt_block_checkpoint_load(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint8_t *addr, size_t addr_size, 
 								uint8_t *root_addr, size_t *root_addr_sizep, int checkpoint)
 {

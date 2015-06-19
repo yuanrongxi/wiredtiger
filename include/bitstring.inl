@@ -62,6 +62,7 @@ static inline void __bit_nset(uint8_t *bitf, uint64_t start, uint64_t stop)
 	}
 }
 
+/*确定第一个bit不为1位的位置序号*/
 static inline int __bit_ffc(uint8_t *bitf, uint64_t nbits, uint64_t *retp)
 {
 	uint8_t lb;
@@ -72,7 +73,8 @@ static inline int __bit_ffc(uint8_t *bitf, uint64_t nbits, uint64_t *retp)
 	if (nbits == 0)
 		return (-1);
 
-	for (byte = 0,stopbyte = __bit_byte(nbits - 1); byte <= stopbyte; ++byte){
+	stopbyte = __bit_byte(nbits - 1);
+	for (byte = 0; byte <= stopbyte; ++byte){
 		if (bitf[byte] != 0xff) {
 			value = byte << 3;
 			for (lb = bitf[byte]; lb & 0x01; ++value, lb >>= 1)
@@ -82,12 +84,12 @@ static inline int __bit_ffc(uint8_t *bitf, uint64_t nbits, uint64_t *retp)
 	}
 
 	if (byte > stopbyte || value >= nbits)
-		return (-1);
+		return -1;
 
 	*retp = value;
 	return 0;
 }
-
+/*确定第一个bit不为0位的位置序号*/
 static inline int __bit_ffs(uint8_t *bitf, uint64_t nbits, uint64_t *retp)
 {
 	uint8_t lb;

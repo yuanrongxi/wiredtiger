@@ -124,6 +124,7 @@ int __wt_block_verify_end(WT_SESSION_IMPL *session, WT_BLOCK *block)
 	return ret;
 }
 
+/*将checkpoint ext的offset位置进行frags bit标识，标识末尾的那个位*/
 int __wt_verify_ckpt_load(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_BLOCK_CKPT *ci)
 {
 	WT_EXTLIST *el;
@@ -178,10 +179,11 @@ int __wt_verify_ckpt_load(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_BLOCK_CK
 	WT_RET(__bit_alloc(session, block->frags, &block->fragckpt));
 	el = &block->verify_alloc;
 
-	/*确定ext的末尾一个对齐块bit上设置1，为最后校验*/
+	/*将整个ext对应的frag置为1*/
 	WT_EXT_FOREACH(ext, el->off) {
 		frag = (uint64_t)WT_wt_off_TO_FRAG(block, ext->off);
 		frags = (uint64_t)(ext->size / block->allocsize);
+		/*将ext对应的范围全部置为1*/
 		__bit_nset(block->fragckpt, frag, frag + (frags - 1));
 	}
 
@@ -198,6 +200,176 @@ int __wt_verify_ckpt_unload(WT_SESSION_IMPL *session, WT_BLOCK *block)
 
 	return ret;
 }
+
+/*将addr对应的(off,size)ext在filefrags对应的位范围全部值为1，对应ckptfrags位范围全部值为0,相当于
+ *从ckptfrags转移到filefrags中*/
+int __wt_block_verify_addr(WT_SESSION_IMPL *session, WT_BLOCK *block, const uint8_t *addr, size_t addr_size)
+{
+	wt_off_t offset;
+	uint32_t cksum, size;
+
+	WT_UNUSED(addr_size);
+
+	WT_RET(__wt_block_buffer_to_addr(block, addr, &offset, &size, &cksum));
+
+	WT_RET(__verify_filefrag_add(session, block, NULL, offset, size, 0));
+	WT_RET(__verify_ckptfrag_add(session, block, offset, size));
+
+	return 0;
+}
+
+/*更改某个ext(off,size)对应的filefrag，将其所有的bit位值置为1*/
+static int __verify_filefrag_add(WT_SESSION_IMPL *session, WT_BLOCK *block, const char *type, wt_off_t offset, wt_off_t size, int nodup)
+{
+	uint64_t f, frag, frags, i;
+
+	WT_RET(__wt_verbose(session, WT_VERB_VERIFY,
+		"add file block%s%s%s at %" PRIuMAX "-%" PRIuMAX " (%" PRIuMAX ")",
+		type == NULL ? "" : " (",type == NULL ? "" : type, type == NULL ? "" : ")", (uintmax_t)offset, (uintmax_t)(offset + size), (uintmax_t)size));
+
+	/*判断(off, size)的合法性*/
+	if(offset + size > block->fh->size){
+		WT_RET_MSG(session, WT_ERROR,
+			"fragment %" PRIuMAX "-%" PRIuMAX " references "
+			"non-existent file blocks",
+			(uintmax_t)offset, (uintmax_t)(offset + size));
+	}
+
+	/*计算ext在frags中的起始位置和范围*/
+	frag = (uint64_t)WT_wt_off_TO_FRAG(block, offset);
+	frags = (uint64_t)(size / block->allocsize);
+
+	if(nodup){
+		for (f = frag, i = 0; i < frags; ++f, ++i)
+			if (__bit_test(block->fragfile, f)) /*判断f位上是否已经有1*/
+				WT_RET_MSG(session, WT_ERROR, "file fragment at %" PRIuMAX " referenced multiple times", (uintmax_t)offset);
+	}
+
+	/*将ext（off,size）范围*/
+	__bit_nset(block->fragfile, frag, frag + (frags - 1));
+
+	return 0;
+}
+
+/*fragefile所有bit位必须全为1*/
+static int __verify_filefrag_chk(WT_SESSION_IMPL* session, WT_BLOCK* block)
+{
+	uint64_t count, first, last;
+
+	if(block->frags == 0)
+		return 0;
+
+	/*将整个fragefile未使用的末尾部分填充为1，直到一个有填充的块上*/
+	for (last = block->frags - 1; last != 0; --last) {
+		if (__bit_test(block->fragfile, last))
+			break;
+
+		__bit_set(block->fragfile, last);
+	}
+
+	for(count = 0;; ++ count){
+		/*确定第一个不为0的bit位置序号,如果有不为1的位，那么count一定会>1,也就表示中间有一个ext没有被使用,这是违背设计初衷的*/
+		if (__bit_ffc(block->fragfile, block->frags, &first) != 0)
+			break;
+
+		for (last = first + 1; last < block->frags; ++last) {
+			if (__bit_test(block->fragfile, last))
+				break;
+			/*将0位设置为1*/
+			__bit_set(block->fragfile, last);
+		}
+
+		if (!WT_VERBOSE_ISSET(session, WT_VERB_VERIFY))
+			continue;
+
+		__wt_errx(session,
+			"file range %" PRIuMAX "-%" PRIuMAX " never verified",
+			(uintmax_t)WT_FRAG_TO_OFF(block, first),
+			(uintmax_t)WT_FRAG_TO_OFF(block, last));
+	}
+
+	if(count == 0)
+		return 0;
+
+	__wt_errx(session, "file ranges never verified: %" PRIu64, count);
+
+	return WT_ERROR;
+}
+
+/*将checkpoint frags的(off,size)对应的bit清空,这个位置在checkpoint frags的bit范围中的值必须全是1*/
+static int __verify_ckptfrag_add(WT_SESSION_IMPL *session, WT_BLOCK *block, wt_off_t offset, wt_off_t size)
+{
+	uint64_t f, frag, frags, i;
+
+	WT_RET(__wt_verbose(session, WT_VERB_VERIFY, "add checkpoint block at %" PRIuMAX "-%" PRIuMAX " (%" PRIuMAX ")",
+		(uintmax_t)offset, (uintmax_t)(offset + size), (uintmax_t)size));
+
+	/*校验(off,size)的合法性*/
+	if (offset + size > block->verify_size){
+		WT_RET_MSG(session, WT_ERROR,
+		"fragment %" PRIuMAX "-%" PRIuMAX " references "
+		"file blocks outside the checkpoint",
+		(uintmax_t)offset, (uintmax_t)(offset + size));
+	}
+
+	frag = (uint64_t)WT_wt_off_TO_FRAG(block, offset);
+	frags = (uint64_t)(size / block->allocsize);
+
+	/*校验(off,size)对应的fragckpt的位置是否全为1，如果不是，说明有问题*/
+	for (f = frag, i = 0; i < frags; ++f, ++i){
+		if (!__bit_test(block->fragckpt, f))
+			WT_RET_MSG(session, WT_ERROR,
+			"fragment at %" PRIuMAX " referenced multiple "
+			"times in a single checkpoint or found in the "
+			"checkpoint but not listed in the checkpoint's "
+			"allocation list",	(uintmax_t)offset);
+	}
+
+	__bit_nclr(block->fragckpt, frag, frag + (frags - 1));
+
+	return 0;
+}
+
+/*检查session->fragckpt是否全为0，如果不为0，表示fragckpt不合法*/
+static int __verify_ckptfrag_chk(WT_SESSION_IMPL* session, WT_BLOCK* block)
+{
+	uint64_t count, first, last;
+
+	if(block->fragckpt == NULL)
+		return 0;
+
+	/*检查checkpoint fragckpt应该是全部被0填充，如果有不为0的bit，说明fragckpt不合法*/
+	for (count = 0;; ++count) {
+		if (__bit_ffs(block->fragckpt, block->frags, &first) != 0)
+			break;
+
+		__bit_clear(block->fragckpt, first);
+
+		for (last = first + 1; last < block->frags; ++last) {
+			if (!__bit_test(block->fragckpt, last))
+				break;
+
+			__bit_clear(block->fragckpt, last);
+		}
+
+		if (!WT_VERBOSE_ISSET(session, WT_VERB_VERIFY))
+			continue;
+
+		__wt_errx(session,
+			"checkpoint range %" PRIuMAX "-%" PRIuMAX " never verified",
+			(uintmax_t)WT_FRAG_TO_OFF(block, first),
+			(uintmax_t)WT_FRAG_TO_OFF(block, last));
+	}
+
+	if (count == 0)
+		return 0;
+
+	__wt_errx(session, "checkpoint ranges never verified: %" PRIu64, count);
+
+	return WT_ERROR;
+}
+
+
 
 
 

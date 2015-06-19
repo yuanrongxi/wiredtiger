@@ -54,7 +54,7 @@ struct __wt_size
 #define	WT_BM_CHECKPOINT_VERSION	1					/* Checkpoint format version */
 #define	WT_BLOCK_EXTLIST_MAGIC		71002				/* Identify a list */
 
-
+/*一个checkpoint信息对象*/
 struct __wt_block_ckpt
 {
 	uint8_t					version;		/*block checkpoint的系统版本号*/
@@ -65,12 +65,10 @@ struct __wt_block_ckpt
 	WT_EXTLIST				alloc;			/* Extents allocated */
 	WT_EXTLIST				avail;			/* Extents available */
 	WT_EXTLIST				discard;		/* Extents discarded */
-
 	wt_off_t				file_size;		/*checkpoint file size*/
+
 	uint64_t				ckpt_size;		/* Checkpoint byte count*/
-
 	WT_EXTLIST				ckpt_avail;		/* Checkpoint free'd extents */
-
 	WT_EXTLIST				ckpt_alloc;		/* Checkpoint archive */
 	WT_EXTLIST				ckpt_discard;	/* Checkpoint archive */
 };
