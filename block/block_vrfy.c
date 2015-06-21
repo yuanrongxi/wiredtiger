@@ -1,5 +1,5 @@
 /**************************************************************************
-*
+*对block进行文件空间校验
 **************************************************************************/
 
 #include "wt_internal.h"
@@ -124,7 +124,7 @@ int __wt_block_verify_end(WT_SESSION_IMPL *session, WT_BLOCK *block)
 	return ret;
 }
 
-/*将checkpoint ext的offset位置进行frags bit标识，标识末尾的那个位*/
+/*将checkpoint alloc未使用的ext进行bit = 1范围标识*/
 int __wt_verify_ckpt_load(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_BLOCK_CKPT *ci)
 {
 	WT_EXTLIST *el;
@@ -133,7 +133,7 @@ int __wt_verify_ckpt_load(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_BLOCK_CK
 
 	block->verify_size = ci->file_size;
 
-	/*将checkpoint元数据位置也设置到filefrag中*/
+	/*将checkpoint元数据位置也设置到filefrag中,因为这个是算使用了的ext对象*/
 	if (ci->root_offset != WT_BLOCK_INVALID_OFFSET)
 		WT_RET(__verify_filefrag_add(session, block, "checkpoint", ci->root_offset, (wt_off_t)ci->root_size, 1));
 

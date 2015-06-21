@@ -103,7 +103,7 @@ err:
 	return ret;
 }
 
-/*卸载一个block checkpoint,没看懂，需要进行复习*/
+/*卸载一个block checkpoint,没看懂，主要是对__wt_verify_ckpt_unload调用,应该是对block连续性进行判断*/
 int __wt_block_checkpoint_unload(WT_SESSION_IMPL *session, WT_BLOCK *block, int checkpoint)
 {
 	WT_DECL_RET;
