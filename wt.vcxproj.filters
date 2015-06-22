@@ -383,5 +383,8 @@
     <ClInclude Include="include\meta.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\async.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -240,7 +240,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "dhandle.h"			
 
 //#include "api.h"
-//#include "async.h"
+#include "async.h"
 #include "block.h"
 #include "bloom.h"
 #include "btmem.h"

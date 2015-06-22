@@ -156,6 +156,7 @@
     <ClCompile Include="test\pack_test.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\async.h" />
     <ClInclude Include="include\block.h" />
     <ClInclude Include="include\bloom.h" />
     <ClInclude Include="include\btmem.h" />
