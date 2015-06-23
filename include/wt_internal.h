@@ -278,7 +278,7 @@ typedef struct __wt_update WT_UPDATE;
 
 //#include "btree.i"			
 //#include "btree_cmp.i"
-//#include "cursor.i"
+#include "cursor.inl"
 
 #include "bitstring.inl"
 //#include "column.i"

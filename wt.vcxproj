@@ -75,6 +75,7 @@
     <None Include="cmake\wt\CMakeLists.txt" />
     <None Include="include\bitstring.inl" />
     <None Include="include\buf.inl" />
+    <None Include="include\cursor.inl" />
     <None Include="include\intpack.inl" />
     <None Include="include\misc.inl" />
     <None Include="include\mutex.inl" />
