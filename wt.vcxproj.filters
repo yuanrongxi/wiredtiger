@@ -303,6 +303,18 @@
     <ClCompile Include="block\block_vrfy.c">
       <Filter>c\block</Filter>
     </ClCompile>
+    <ClCompile Include="cursor\cur_std.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
+    <ClCompile Include="cursor\cur_log.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
+    <ClCompile Include="cursor\cur_config.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
+    <ClCompile Include="cursor\cur_stat.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

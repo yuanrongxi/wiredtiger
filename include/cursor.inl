@@ -134,6 +134,89 @@ static inline int __cursor_reset(WT_CURSOR_BTREE* cbt)
 	return ret;
 }
 
+/*返回一个行(row)的叶子page的slot的KV键值对，值是存在cursor的value中*/
+static inline __cursor_row_slot_return(WT_CURSOR_BTREE* cbt, WT_ROW* rip, WT_UPDATE* upd)
+{
+	WT_BTREE *btree;
+	WT_ITEM *kb, *vb;
+	WT_CELL *cell;
+	WT_CELL_UNPACK *unpack, _unpack;
+	WT_PAGE *page;
+	WT_SESSION_IMPL *session;
+	void* copy;
+
+
+	session = (WT_SESSION_IMPL *)(cbt->iface.session);
+	btree = S2BT(session);
+	page = cbt->ref->page;
+
+	unpack = NULL;
+
+	kb = &(cbt->iface.key);
+	vb = &(cbt->iface.value);
+	/*获得key的指针*/
+	copy = WT_ROW_KEY_COPY(rip);
+
+	/*
+	 * Get a key: we could just call __wt_row_leaf_key, but as a cursor
+	 * is running through the tree, we may have additional information
+	 * here (we may have the fully-built key that's immediately before
+	 * the prefix-compressed key we want, so it's a faster construction).
+	 *
+	 * First, check for an immediately available key.
+	 */
+	if(__wt_row_leaf_key_info(page, copy, &cell, &kb->data, &kb->size))
+		goto value;
+
+	if(btree->huffman_key != NULL)
+		goto slow;
+
+	unpack = &_unpack;
+	__wt_cell_unpack(cell, unpack);
+	if(unpack->type == WT_CELL_KEY && cbt->rip_saved != NULL && cbt->rip_saved == rip - 1) {
+		WT_ASSERT(session, cbt->tmp.size >= unpack->prefix);
+
+		cbt->tmp.size = unpack->prefix;
+		WT_RET(__wt_buf_grow(session, &cbt->tmp, cbt->tmp.size + unpack->size));
+		cbt->tmp.size += unpack->size;
+	}
+	else{
+		/*
+		 * Call __wt_row_leaf_key_work instead of __wt_row_leaf_key: we
+		 * already did __wt_row_leaf_key's fast-path checks inline.
+		 */
+slow:
+		WT_RET(__wt_row_leaf_key_work(session, page, rip, &cbt->tmp, 0));
+	}
+
+	kb->data = cbt->tmp.data;
+	kb->size = cbt->tmp.size;
+	cbt->rip_saved = rip;
+
+value:
+	if(upd != NULL){
+		vb->data = WT_UPDATE_DATA(upd);
+		vb->size = upd->size;
+		return 0;
+	}
+
+	if(__wt_row_leaf_value(page, rip, vb))
+		return 0;
+
+	if ((cell = __wt_row_leaf_value_cell(page, rip, unpack)) == NULL) {
+		vb->data = "";
+		vb->size = 0;
+		return (0);
+	}
+
+	unpack = &_unpack;
+	__wt_cell_unpack(cell, unpack);
+
+	return __wt_page_cell_data_ref(session, cbt->ref->page, unpack, vb);
+}
+
+
+
 
 
 

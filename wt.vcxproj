@@ -106,7 +106,11 @@
     <ClCompile Include="config\config_upgrade.c" />
     <ClCompile Include="conn\api_version.c" />
     <ClCompile Include="conn\conn_log.c" />
+    <ClCompile Include="cursor\cur_config.c" />
     <ClCompile Include="cursor\cur_json.c" />
+    <ClCompile Include="cursor\cur_log.c" />
+    <ClCompile Include="cursor\cur_stat.c" />
+    <ClCompile Include="cursor\cur_std.c" />
     <ClCompile Include="log\log.c" />
     <ClCompile Include="log\log_auto.c" />
     <ClCompile Include="log\log_slot.c" />
