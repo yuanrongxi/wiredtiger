@@ -52,6 +52,9 @@
     <Filter Include="c\block">
       <UniqueIdentifier>{8c62f329-e3ec-4e4c-9ad4-e740d81f8c6b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\lsm">
+      <UniqueIdentifier>{c38a542d-a0f2-4d3d-87ee-aa9b4395d281}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -112,9 +115,6 @@
       <Filter>c\support</Filter>
     </ClCompile>
     <ClCompile Include="support\hex.c">
-      <Filter>c\support</Filter>
-    </ClCompile>
-    <ClCompile Include="stat.c">
       <Filter>c\support</Filter>
     </ClCompile>
     <ClCompile Include="posix\os_sleep.c">
@@ -315,6 +315,15 @@
     <ClCompile Include="cursor\cur_stat.c">
       <Filter>c\cursor</Filter>
     </ClCompile>
+    <ClCompile Include="lsm\lsm_stat.c">
+      <Filter>c\lsm</Filter>
+    </ClCompile>
+    <ClCompile Include="support\stat.c">
+      <Filter>c\support</Filter>
+    </ClCompile>
+    <ClCompile Include="lsm\lsm_meta.c">
+      <Filter>c\lsm</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
@@ -399,6 +408,12 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\async.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\lsm.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\compact.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

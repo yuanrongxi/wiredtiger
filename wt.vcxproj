@@ -114,6 +114,8 @@
     <ClCompile Include="log\log.c" />
     <ClCompile Include="log\log_auto.c" />
     <ClCompile Include="log\log_slot.c" />
+    <ClCompile Include="lsm\lsm_meta.c" />
+    <ClCompile Include="lsm\lsm_stat.c" />
     <ClCompile Include="packing\pack_api.c" />
     <ClCompile Include="packing\pack_impl.c" />
     <ClCompile Include="packing\pack_stream.c" />
@@ -146,7 +148,6 @@
     <ClCompile Include="posix\os_thread.c" />
     <ClCompile Include="posix\os_time.c" />
     <ClCompile Include="posix\os_yield.c" />
-    <ClCompile Include="stat.c" />
     <ClCompile Include="support\cksum.c" />
     <ClCompile Include="support\err.c" />
     <ClCompile Include="support\filename.c" />
@@ -157,6 +158,7 @@
     <ClCompile Include="support\pow.c" />
     <ClCompile Include="support\rand.c" />
     <ClCompile Include="support\scratch.c" />
+    <ClCompile Include="support\stat.c" />
     <ClCompile Include="test\base_test.c" />
     <ClCompile Include="test\pack_test.c" />
   </ItemGroup>
@@ -165,6 +167,7 @@
     <ClInclude Include="include\block.h" />
     <ClInclude Include="include\bloom.h" />
     <ClInclude Include="include\btmem.h" />
+    <ClInclude Include="include\compact.h" />
     <ClInclude Include="include\config.h" />
     <ClInclude Include="include\connection.h" />
     <ClInclude Include="include\cursor.h" />
@@ -176,6 +179,7 @@
     <ClInclude Include="include\gcc.h" />
     <ClInclude Include="include\hardware.h" />
     <ClInclude Include="include\log.h" />
+    <ClInclude Include="include\lsm.h" />
     <ClInclude Include="include\meta.h" />
     <ClInclude Include="include\misc.h" />
     <ClInclude Include="include\mutex.h" />
