@@ -6,8 +6,10 @@ struct __wt_lsm_worker_cookie
 {
 	WT_LSM_CHUNK**		chunk_array;		/*一个wt_lsm_chunk的数组*/
 	size_t				chunk_alloc;		/*chunk array空间长度*/
-	u_int				nchuncks;			/*chunk array中有效单元的个数*/
+	u_int				nchunks;			/*chunk array中有效单元的个数*/
 };
+
+#define	WT_LSM_WORKER_RUN	0x01
 
 /*LSM线程体的参数描述*/
 struct __wt_lsm_worker_args
@@ -64,7 +66,7 @@ struct __wt_cursor_lsm
 #define	WT_LSM_CHUNK_STABLE		0x08
 
 /*LSM CHUNK结构定义*/
-struct WT_COMPILER_TYPE_ALIGN(WT_CACHE_LINE_ALIGNMENT) __wt_lsm_chunk
+struct  __wt_lsm_chunk
 {
 	const char*		uri;						/* data source的uri */
 	const char*		bloom_uri;					/* 对应的bloom filter */

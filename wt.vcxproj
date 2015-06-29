@@ -116,6 +116,8 @@
     <ClCompile Include="log\log_slot.c" />
     <ClCompile Include="lsm\lsm_meta.c" />
     <ClCompile Include="lsm\lsm_stat.c" />
+    <ClCompile Include="lsm\lsm_worker.c" />
+    <ClCompile Include="lsm\lsm_work_unit.c" />
     <ClCompile Include="packing\pack_api.c" />
     <ClCompile Include="packing\pack_impl.c" />
     <ClCompile Include="packing\pack_stream.c" />

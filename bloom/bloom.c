@@ -164,8 +164,7 @@ int __wt_bloom_finalize(WT_BLOOM *bloom)
 	 * TODO: should this call __wt_schema_create directly?
 	 */
 	WT_RET(wt_session->create(wt_session, bloom->uri, bloom->config));
-	WT_RET(wt_session->open_cursor(
-	    wt_session, bloom->uri, NULL, "bulk=bitmap", &c));
+	WT_RET(wt_session->open_cursor(wt_session, bloom->uri, NULL, "bulk=bitmap", &c));
 
 	/* Add the entries from the array into the table. */
 	for (i = 0; i < bloom->m; i += values.size) {
