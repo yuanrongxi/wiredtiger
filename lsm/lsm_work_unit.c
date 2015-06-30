@@ -366,6 +366,101 @@ static int __lsm_drop_file(WT_SESSION_IMPL* session, const char* uri)
 
 	/*从cache中驱逐已经建立checkpoint的数据*/
 	WT_RET(__lsm_discard_handle(session, uri, WT_CHECKPOINT));
+
+	/*删除元数据*/
+	WT_WITH_SCHEMA_LOCK(session, ret = __wt_schema_drop(session, uri, drop_cfg));
+
+	/*文件删除*/
+	if (ret == 0)
+		ret = __wt_remove(session, uri + strlen("file:"));
+
+	WT_RET(__wt_verbose(session, WT_VERB_LSM, "Dropped %s", uri));
+
+	if (ret == EBUSY || ret == ENOENT)
+		WT_RET(__wt_verbose(session, WT_VERB_LSM, "LSM worker drop of %s failed with %d", uri, ret));
+
+	return ret;
 }
+
+/*释放掉old chunks中的空闲chunk*/
+int __wt_lsm_free_chunks(WT_SESSION_IMPL *session, WT_LSM_TREE *lsm_tree)
+{
+	WT_DECL_RET;
+	WT_LSM_CHUNK *chunk;
+	WT_LSM_WORKER_COOKIE cookie;
+	u_int i, skipped;
+	int flush_metadata, drop_ret;
+
+	flush_metadata = 0;
+
+	/*设置free状态*/
+	if (!WT_ATOMIC_CAS4(lsm_tree->freeing_old_chunks, 0, 1))
+		return 0;
+
+	/*对old chunks的引用计数进行增加，做占用标识*/
+	WT_CLEAR(cookie);
+	WT_RET(__lsm_copy_chunks(session, lsm_tree, &cookie, 1));
+
+	for(i = skipped = 0; i < cookie.nchunks; i ++){
+		chunk = cookie.chunk_array[i];
+		WT_ASSERT(session, chunk != NULL);
+		/* Skip the chunk if another worker is using it. 还有其他模块在引用这个chunk，不做释放*/
+		if (chunk->refcnt > 1) {
+			++skipped;
+			continue;
+		}
+
+		if (S2C(session)->hot_backup != 0)
+			break;
+
+		/*如果chunk是一个bloom filter数据，那么直接删除掉对应的bloom filter对应的文件,如果这个文件正在被引用，那么暂时不删除*/
+		if (F_ISSET(chunk, WT_LSM_CHUNK_BLOOM)) {
+			drop_ret = __lsm_drop_file(session, chunk->bloom_uri);
+			if (drop_ret == EBUSY) {
+				++skipped;
+				continue;
+			} 
+			else if (drop_ret != ENOENT)
+				WT_ERR(drop_ret);
+
+			flush_metadata = 1;
+			F_CLR(chunk, WT_LSM_CHUNK_BLOOM);
+		}
+
+		if (chunk->uri != NULL) {
+			drop_ret = __lsm_drop_file(session, chunk->uri);
+			if (drop_ret == EBUSY) {
+				++skipped;
+				continue;
+			} 
+			else if (drop_ret != ENOENT)
+				WT_ERR(drop_ret);
+
+			flush_metadata = 1;
+		}
+
+		/* Lock the tree to clear out the old chunk information. */
+		WT_ERR(__wt_lsm_tree_writelock(session, lsm_tree));
+
+		/*更新old_chunks的状态*/
+		WT_ASSERT(session, lsm_tree->old_chunks[skipped] == chunk);
+		__wt_free(session, chunk->bloom_uri);
+		__wt_free(session, chunk->uri);
+		__wt_free(session, lsm_tree->old_chunks[skipped]);
+
+		/*删除掉chunk在old chunks中的关系*/
+		if (--lsm_tree->nold_chunks > skipped) {
+			memmove(lsm_tree->old_chunks + skipped, lsm_tree->old_chunks + skipped + 1, (lsm_tree->nold_chunks - skipped) * sizeof(WT_LSM_CHUNK *));
+			lsm_tree->old_chunks[lsm_tree->nold_chunks] = NULL;
+		}
+
+		WT_ERR(__wt_lsm_tree_writeunlock(session, lsm_tree));
+
+		cookie.chunk_array[i] = NULL;
+	}
+}
+
+
+
 
 

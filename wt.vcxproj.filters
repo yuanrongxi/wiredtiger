@@ -330,6 +330,9 @@
     <ClCompile Include="lsm\lsm_work_unit.c">
       <Filter>c\lsm</Filter>
     </ClCompile>
+    <ClCompile Include="lsm\lsm_manager.c">
+      <Filter>c\lsm</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
