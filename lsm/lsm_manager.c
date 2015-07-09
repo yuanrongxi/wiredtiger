@@ -111,7 +111,7 @@ static int __lsm_stop_workers(WT_SESSION_IMPL* session)
 	return 0;
 }
 
-/*重新读取lsm manager的配置，并且*/
+/*重新读取lsm manager的配置，并且对应工作线程的数量*/
 int __wt_lsm_manager_reconfig(WT_SESSION_IMPL *session, const char **cfg)
 {
 	WT_LSM_MANAGER *manager;
@@ -402,7 +402,7 @@ err:
 	return WT_THREAD_RET_VALUE;
 }
 
-
+/*清空各个任务队列中的任务*/
 int __wt_lsm_manager_clear_tree(WT_SESSION_IMPL *session, WT_LSM_TREE *lsm_tree)
 {
 	WT_LSM_MANAGER *manager;
