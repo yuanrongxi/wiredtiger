@@ -118,6 +118,7 @@
     <ClCompile Include="lsm\lsm_merge.c" />
     <ClCompile Include="lsm\lsm_meta.c" />
     <ClCompile Include="lsm\lsm_stat.c" />
+    <ClCompile Include="lsm\lsm_tree.c" />
     <ClCompile Include="lsm\lsm_worker.c" />
     <ClCompile Include="lsm\lsm_work_unit.c" />
     <ClCompile Include="packing\pack_api.c" />

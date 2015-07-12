@@ -336,6 +336,9 @@
     <ClCompile Include="lsm\lsm_merge.c">
       <Filter>c\lsm</Filter>
     </ClCompile>
+    <ClCompile Include="lsm\lsm_tree.c">
+      <Filter>c\lsm</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
