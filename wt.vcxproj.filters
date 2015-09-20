@@ -431,5 +431,8 @@
     <ClInclude Include="include\compact.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\btree.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

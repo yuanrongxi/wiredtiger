@@ -172,6 +172,7 @@
     <ClInclude Include="include\block.h" />
     <ClInclude Include="include\bloom.h" />
     <ClInclude Include="include\btmem.h" />
+    <ClInclude Include="include\btree.h" />
     <ClInclude Include="include\compact.h" />
     <ClInclude Include="include\config.h" />
     <ClInclude Include="include\connection.h" />

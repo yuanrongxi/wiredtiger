@@ -1,5 +1,5 @@
 /**************************************************************************
-* 定义元数据的一些宏和checkpoint信息结构
+* 定义元数据的一些meta信息宏和checkpoint信息结构
 **************************************************************************/
 
 #define	WT_WIREDTIGER		"WiredTiger"				/* Version file */
@@ -35,7 +35,7 @@
 	for ((ckpt) = (ckptbase); (ckpt)->name != NULL; ++(ckpt))
 
 
-#define	WT_CKPT_ADD	0x01				/* Checkpoint to be added */
+#define	WT_CKPT_ADD		0x01			/* Checkpoint to be added */
 #define	WT_CKPT_DELETE	0x02			/* Checkpoint to be deleted */
 #define	WT_CKPT_FAKE	0x04			/* Checkpoint is a fake */
 #define	WT_CKPT_UPDATE	0x08			/* Checkpoint requires update */

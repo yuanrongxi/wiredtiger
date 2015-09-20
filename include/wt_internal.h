@@ -244,7 +244,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "block.h"
 #include "bloom.h"
 #include "btmem.h"
-//#include "btree.h"
+#include "btree.h"
 //#include "cache.h"
 #include "config.h"
 #include "compact.h"
