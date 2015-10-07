@@ -88,6 +88,12 @@
     <None Include="include\cursor.inl">
       <Filter>inl</Filter>
     </None>
+    <None Include="include\btree.inl">
+      <Filter>inl</Filter>
+    </None>
+    <None Include="include\btree_cmp.inl">
+      <Filter>inl</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="test\base_test.c">
