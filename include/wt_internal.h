@@ -271,7 +271,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "intpack.inl"			
 #include "packing.inl"
 //#include "cache.i"			
-//#include "cell.i"			
+#include "cell.inl"			
 
 #include "mutex.inl"			
 //#include "txn.i"			

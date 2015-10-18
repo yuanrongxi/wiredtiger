@@ -141,7 +141,7 @@ static inline int __wt_vunpack_negint(const uint8_t **pp, size_t maxlen, uint64_
 /*用可变打包长度方式pack一个无符号数到pp中*/
 static inline int __wt_vpack_uint(uint8_t **pp, size_t maxlen, uint64_t x)
 {
-uint8_t *p;
+	uint8_t *p;
 
 	WT_SIZE_CHECK(1, maxlen);
 	p = *pp;
