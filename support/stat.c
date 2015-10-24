@@ -1,7 +1,7 @@
 /* DO NOT EDIT: automatically built by dist/stat.py. */
 
 #include "wt_internal.h"
-
+ 
 void
 	__wt_stat_init_dsrc_stats(WT_DSRC_STATS *stats)
 {
