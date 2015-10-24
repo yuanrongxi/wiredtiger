@@ -55,6 +55,9 @@
     <Filter Include="c\lsm">
       <UniqueIdentifier>{c38a542d-a0f2-4d3d-87ee-aa9b4395d281}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\btree">
+      <UniqueIdentifier>{f9c031b5-3992-4237-b305-41ad3239fc52}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -95,7 +98,7 @@
       <Filter>inl</Filter>
     </None>
     <None Include="include\cell.inl">
-      <Filter>include</Filter>
+      <Filter>inl</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
@@ -347,6 +350,12 @@
     </ClCompile>
     <ClCompile Include="lsm\lsm_tree.c">
       <Filter>c\lsm</Filter>
+    </ClCompile>
+    <ClCompile Include="support\hazard.c">
+      <Filter>c\support</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\bt_io.c">
+      <Filter>c\btree</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

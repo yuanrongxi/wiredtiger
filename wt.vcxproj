@@ -99,6 +99,7 @@
     <ClCompile Include="block\block_vrfy.c" />
     <ClCompile Include="block\block_write.c" />
     <ClCompile Include="bloom\bloom.c" />
+    <ClCompile Include="btree\bt_io.c" />
     <ClCompile Include="config\config.c" />
     <ClCompile Include="config\config_api.c" />
     <ClCompile Include="config\config_check.c" />
@@ -161,6 +162,7 @@
     <ClCompile Include="support\filename.c" />
     <ClCompile Include="support\hash_city.c" />
     <ClCompile Include="support\hash_fnv.c" />
+    <ClCompile Include="support\hazard.c" />
     <ClCompile Include="support\hex.c" />
     <ClCompile Include="support\huffman.c" />
     <ClCompile Include="support\pow.c" />
