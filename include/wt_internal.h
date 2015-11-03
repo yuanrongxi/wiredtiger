@@ -276,7 +276,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "mutex.inl"			
 //#include "txn.i"			
 
-//#include "btree.i"			
+#include "btree.inl"			
 #include "btree_cmp.inl"
 #include "cursor.inl"
 
