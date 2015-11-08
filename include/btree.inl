@@ -409,7 +409,7 @@ static inline void __wt_row_leaf_key_set(WT_PAGE* page, WT_ROW* rip, WT_CELL_UNP
 }
 
 /*设置行存储时叶子节点的reference cell的值*/
-static inline void __wt_row_leaf_key_set_cell(WT_PAGE* page, WT_ROW* rip, WT_CELL_UNPACK* unpack)
+static inline void __wt_row_leaf_key_set_cell(WT_PAGE* page, WT_ROW* rip, WT_CELL* cell)
 {
 	uintptr_t v;
 	v = WT_CELL_ENCODE_OFFSET(WT_PAGE_DISK_OFFSET(page, cell)) | WT_CELL_FLAG;

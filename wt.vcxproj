@@ -99,6 +99,7 @@
     <ClCompile Include="block\block_vrfy.c" />
     <ClCompile Include="block\block_write.c" />
     <ClCompile Include="bloom\bloom.c" />
+    <ClCompile Include="btree\bt_handle.c" />
     <ClCompile Include="btree\bt_io.c" />
     <ClCompile Include="btree\bt_page.c" />
     <ClCompile Include="config\config.c" />

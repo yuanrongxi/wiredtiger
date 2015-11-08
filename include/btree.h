@@ -44,7 +44,7 @@ struct __wt_btree
 	enum{
 		BTREE_COL_FIX = 1,						/*列式定长存储*/
 		BTREE_COL_VAR = 2,						/*列式边长存储*/
-		BTRERR_ROW	  = 3,						/*行式存储*/
+		BTREE_ROW	  = 3,						/*行式存储*/
 	} type;
 
 	const char*				key_format;			/*key格式串*/

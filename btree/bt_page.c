@@ -224,5 +224,366 @@ err:
 	return 0;
 }
 
+/*将一个page从磁盘上读入内存，并且构建其page的内存结构信息*/
+int __wt_page_inmem(WT_SESSION_IMPL *session, WT_REF *ref, const void *image, size_t memsize, uint32_t flags, WT_PAGE **pagep)
+{
+	WT_DECL_RET;
+	WT_PAGE *page;
+	const WT_PAGE_HEADER *dsk;
+	uint32_t alloc_entries;
+	size_t size;
+
+	*pagep = NULL;
+
+	dsk = image;
+	alloc_entries = 0;
+
+	/*确定需要在内存中分配的entry数量*/
+	switch(dsk->type){
+	case WT_PAGE_COL_FIX:
+	case WT_PAGE_COL_INT:
+	case WT_PAGE_COL_VAR:
+		alloc_entries = dsk->u.entries;
+		break;
+
+	case WT_PAGE_ROW_INT:
+		alloc_entries = dsk->u.entries / 2;
+		break;
+
+	case WT_PAGE_ROW_LEAF:
+		if (F_ISSET(dsk, WT_PAGE_EMPTY_V_ALL))
+			alloc_entries = dsk->u.entries;
+		else if (F_ISSET(dsk, WT_PAGE_EMPTY_V_NONE))
+			alloc_entries = dsk->u.entries / 2;
+		else
+			WT_RET(__inmem_row_leaf_entries(session, dsk, &alloc_entries));
+		break;
+
+	WT_ILLEGAL_VALUE(session);
+	}
+
+	/*分配page对象的内存并初始化*/
+	WT_RET(__wt_page_alloc(session, dsk->type, dsk->recno, alloc_entries, 1, &page));
+	page->dsk = dsk;
+	F_SET_ATOMIC(page, flags);
+
+	size = LF_ISSET(WT_PAGE_DISK_ALLOC) ? memsize : 0;
+
+	/*设置page内部内存对象结构和记录长度等*/
+	switch(page->type){
+	case WT_PAGE_COL_FIX:
+		__inmem_col_fix(session, page);
+		break;
+
+	case WT_PAGE_COL_INT:
+		__inmem_col_int(session, page);
+		break;
+
+	case WT_PAGE_COL_VAR:
+		WT_ERR(__inmem_col_var(session, page, &size));
+		break;
+
+	case WT_PAGE_ROW_INT:
+		WT_ERR(__inmem_row_int(session, page, &size));
+		break;
+
+	case WT_PAGE_ROW_LEAF:
+		WT_ERR(__inmem_row_leaf(session, page));
+		break;
+
+	WT_ILLEGAL_VALUE_ERR(session);
+	}
+
+	/*修改page对应的内存cache统计*/
+	__wt_cache_page_inmem_incr(session, page, size);
+
+	if(ref != NULL){
+		switch (page->type) {
+		case WT_PAGE_COL_INT:
+		case WT_PAGE_ROW_INT:
+			page->pg_intl_parent_ref = ref;
+			break;
+		}
+		ref->page = page;
+	}
+
+	*pagep = page;
+	return 0;
+
+err:
+	__wt_page_out(session, &page); /*如果内存对象失败，将内存对象page废弃*/
+	return ret;
+}
+
+/*如果是列式固定长度存储，指定存储数据开始的缓冲区位置*/
+static void __inmem_col_fix(WT_SESSION_IMPL* session, WT_PAGE* page)
+{
+	WT_BTREE *btree;
+	const WT_PAGE_HEADER *dsk;
+
+	btree = S2BT(session);
+	dsk = page->dsk;
+
+	page->pg_fix_bitf = WT_PAGE_HEADER_BYTE(btree, dsk);
+}
+
+/*构建列式存储 内存索引的结构*/
+static void __inmem_col_int(WT_SESSION_IMPL* session, WT_PAGE* page)
+{
+	WT_BTREE *btree;
+	WT_CELL *cell;
+	WT_CELL_UNPACK *unpack, _unpack;
+	const WT_PAGE_HEADER *dsk;
+	WT_PAGE_INDEX *pindex;
+	WT_REF **refp, *ref;
+	uint32_t i;
+
+	btree = S2BT(session);
+	dsk = page->dsk;
+	unpack = &_unpack;
+
+	/*获得page的index指针数组*/
+	pindex = WT_INTL_INDEX_GET_SAFE(page);
+	refp = pindex->index;
+
+	/*指定索引结构指向的下一级page位置*/
+	WT_CELL_FOREACH(btree, dsk, cell, unpack, i){
+		ref = *refp ++;
+		ref->home = page;
+		/*读取cell对应的kv数据，并进行unpack，设置到ref上*/
+		__wt_cell_unpack(cell, unpack);
+		ref->addr = cell;
+		ref->key.recno = unpack->v;
+	}
+}
+
+/*统计page中重复entry的个数*/
+static int __inmem_col_var_repeats(WT_SESSION_IMPL* session, WT_PAGE* page, uint32_t* np)
+{
+	WT_BTREE *btree;
+	WT_CELL *cell;
+	WT_CELL_UNPACK *unpack, _unpack;
+	const WT_PAGE_HEADER *dsk;
+	uint32_t i;
+
+	btree = S2BT(session);
+	dsk = page->dsk;
+	unpack = &_unpack;
+
+	*np = 0;
+
+	*np = 0;
+	WT_CELL_FOREACH(btree, dsk, cell, unpack, i) {
+		__wt_cell_unpack(cell, unpack);
+		if (__wt_cell_rle(unpack) > 1) /*unpack->v <= 1表示entries重复*/
+			++*np;
+	}
+
+	return 0;
+}
+
+/*为变长的列式存储page构建内存中的索引结构对象*/
+static int __inmem_col_var(WT_SESSION_IMPL *session, WT_PAGE *page, size_t *sizep)
+{
+	WT_BTREE *btree;
+	WT_COL *cip;
+	WT_COL_RLE *repeats;
+	WT_CELL *cell;
+	WT_CELL_UNPACK *unpack, _unpack;
+	const WT_PAGE_HEADER *dsk;
+	uint64_t recno, rle;
+	size_t bytes_allocated;
+	uint32_t i, indx, n, repeat_off;
+
+	btree = S2BT(session);
+	dsk = page->dsk;
+	recno = page->pg_var_recno;
+
+	repeats = NULL;
+	repeat_off = 0;
+	unpack = &_unpack;
+	bytes_allocated = 0;
+
+	indx = 0;
+	cip = page->pg_var_d;
+
+	WT_CELL_FOREACH(btree, dsk, cell, unpack, i){
+		__wt_cell_unpack(cell, unpack);
+		WT_COL_PTR_SET(cip, WT_PAGE_DISK_OFFSET(page, cell));
+		cip++;
+
+		/*为重复的entry分配内存并做对应的repeat标示*/
+		rle = __wt_cell_rle(unpack);
+		if (rle > 1) {
+			if(repeats == NULL){
+				WT_RET(__inmem_col_var_repeats(session, page, &n));
+				WT_RET(__wt_realloc_def(session, &bytes_allocated, n + 1, &repeats));
+
+				page->pg_var_repeats = repeats;
+				page->pg_var_nrepeats = n;
+				*sizep += bytes_allocated;
+			}
+			repeats[repeat_off].indx = indx;
+			repeats[repeat_off].recno = recno;
+			repeats[repeat_off++].rle = rle;
+		}
+
+		indx++;
+		recno += rle;
+	}
+
+	return 0;
+}
+
+/*为行存储的page构建内部索引的内存对象,非叶子节点*/
+static int __inmem_row_int(WT_SESSION_IMPL* session, WT_PAGE* page, size_t* sizep)
+{
+	WT_BTREE *btree;
+	WT_CELL *cell;
+	WT_CELL_UNPACK *unpack, _unpack;
+	WT_DECL_ITEM(current);
+	WT_DECL_RET;
+	const WT_PAGE_HEADER *dsk;
+	WT_PAGE_INDEX *pindex;
+	WT_REF *ref, **refp;
+	uint32_t i;
+
+	btree = S2BT(session);
+	unpack = &_unpack;
+	dsk = page->dsk;
+
+	WT_RET(__wt_scr_alloc(session, 0, &current));
+
+	/*设置索引对象指向下一层page的对象指针*/
+	pindex = WT_INTL_INDEX_GET_SAFE(page);
+	refp = pindex->index;
+	WT_CELL_FOREACH(btree, dsk, cell, unpack, i){
+		ref = *refp;
+		ref->home = page;
+
+		__wt_cell_unpack(cell, unpack);
+		switch(unpack->type){
+		case WT_CELL_KEY:
+			__wt_ref_key_onpage_set(page, ref, unpack);
+			break;
+
+		case WT_CELL_KEY_OVFL:
+			/*overflow key的内容是存储在单独存储空间上，需要用overflow方式读取到内存对象中来并构建row key*/
+			WT_ERR(__wt_dsk_cell_data_ref(session, page->type, unpack, current));
+			WT_ERR(__wt_row_ikey_incr(session, page, WT_PAGE_DISK_OFFSET(page, cell), current->data, current->size, ref));
+			*sizep += sizeof(WT_IKEY) + current->size;
+			break;
+
+			/*被del mark的cell数据是需要重建标示modified的*/
+		case WT_CELL_ADDR_DEL:
+			ref->addr = cell;
+			ref->state = WT_REF_DELETED;
+			++refp;
+			if(btree->modified){
+				WT_ERR(__wt_page_modify_init(session, page));
+				__wt_page_modify_set(session, page);
+			}
+			break;
+
+		case WT_CELL_ADDR_INT:
+		case WT_CELL_ADDR_LEAF:
+		case WT_CELL_ADDR_LEAF_NO:
+			ref->addr = cell;
+			++refp;
+			break;
+
+		WT_ILLEGAL_VALUE_ERR(session);
+		}
+	}
+
+err:
+	__wt_scr_free(session, &current);
+	return ret;
+}
+
+/*计算行存储page中的entry数量*/
+static int __inmem_row_leaf_entries(WT_SESSION_IMPL* session, const WT_PAGE_HEADER* dsk, uint32_t* nindxp)
+{
+	WT_BTREE *btree;
+	WT_CELL *cell;
+	WT_CELL_UNPACK *unpack, _unpack;
+	uint32_t i, nindx;
+
+	btree = S2BT(session);
+	unpack = &_unpack;
+
+	nindx = 0;
+
+	WT_CELL_FOREACH(btree, dsk, cell, unpack, i){
+		__wt_cell_unpack(cell, unpack);
+		switch (unpack->type) {
+		case WT_CELL_KEY:
+		case WT_CELL_KEY_OVFL:
+			++nindx;
+			break;
+
+		case WT_CELL_VALUE:
+		case WT_CELL_VALUE_OVFL:
+			break;
+
+		WT_ILLEGAL_VALUE(session);
+		}
+	}
+
+	*nindxp = nindx;
+
+	return 0;
+}
+
+/*构建行存储leaf page的内存索引对象*/
+static int __inmem_row_leaf(WT_SESSION_IMPL* session, WT_PAGE* page)
+{
+	WT_BTREE *btree;
+	WT_CELL *cell;
+	WT_CELL_UNPACK *unpack, _unpack;
+	const WT_PAGE_HEADER *dsk;
+	WT_ROW *rip;
+	uint32_t i;
+
+	btree = S2BT(session);
+	dsk = page->dsk;
+	unpack = &_unpack;
+
+	rip = page->pg_row_d;
+	WT_CELL_FOREACH(btree, dsk, cell, unpack, i){
+		__wt_cell_unpack(cell, unpack);
+
+		switch(unpack->type){
+			case WT_CELL_KEY_OVFL:
+				__wt_row_leaf_key_set_cell(page, rip, cell);
+				++rip;
+				break;
+
+			case WT_CELL_KEY:
+				if (!btree->huffman_key && unpack->prefix == 0)
+					__wt_row_leaf_key_set(page, rip, unpack);
+				else
+					__wt_row_leaf_key_set_cell(page, rip, cell);
+				++rip;
+				break;
+
+			case WT_CELL_VALUE:
+				if (!btree->huffman_value)
+					__wt_row_leaf_value_set(page, rip - 1, unpack);
+				break;
+
+			case WT_CELL_VALUE_OVFL:
+				break;
+
+			WT_ILLEGAL_VALUE(session);
+		}
+	}
+
+	return 0;
+}
+
+
+
+
 
 
