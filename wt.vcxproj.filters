@@ -363,6 +363,18 @@
     <ClCompile Include="btree\bt_handle.c">
       <Filter>c\btree</Filter>
     </ClCompile>
+    <ClCompile Include="btree\bt_misc.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\bt_debug.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\bt_delete.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\bt_discard.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

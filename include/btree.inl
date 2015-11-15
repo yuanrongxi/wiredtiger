@@ -22,7 +22,7 @@ static inline int __wt_page_is_modified(WT_PAGE* page)
 }
 
 /*在cache增加对page的内存信息统计*/
-static inline void __wt_cache_inmem_incr(WT_SESSION_IMPL *session, WT_PAGE *page, size_t size)
+static inline void __wt_cache_page_inmem_incr(WT_SESSION_IMPL *session, WT_PAGE *page, size_t size)
 {
 	WT_CACHE* cache;
 
