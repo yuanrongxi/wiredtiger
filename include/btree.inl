@@ -449,7 +449,7 @@ static inline void __wt_row_leaf_value_set(WT_PAGE* page, WT_ROW* rip, WT_CELL_U
 	WT_ROW_KEY_SET(rip, v);
 }
 
-/*获取row store的叶子节点参考KEY值*/
+/*获取row store的叶子节ref的KEY值*/
 static inline int __wt_row_leaf_key(WT_SESSION_IMPL* session, WT_PAGE* page, WT_ROW* rip, WT_ITEM* key, int instantiate)
 {
 	void* copy;

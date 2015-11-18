@@ -106,6 +106,8 @@
     <ClCompile Include="btree\bt_io.c" />
     <ClCompile Include="btree\bt_misc.c" />
     <ClCompile Include="btree\bt_page.c" />
+    <ClCompile Include="btree\bt_read.c" />
+    <ClCompile Include="btree\bt_ret.c" />
     <ClCompile Include="config\config.c" />
     <ClCompile Include="config\config_api.c" />
     <ClCompile Include="config\config_check.c" />
