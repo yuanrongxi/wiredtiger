@@ -983,6 +983,7 @@ struct __wt_insert_head {
 #define	WT_COL_UPDATE_SLOT(page, slot)					\
 	((page)->modify == NULL || (page)->modify->mod_update == NULL ?	\
 	    NULL : (page)->modify->mod_update[slot])
+
 #define	WT_COL_UPDATE(page, ip)						\
 	WT_COL_UPDATE_SLOT(page, WT_COL_SLOT(page, ip))
 
