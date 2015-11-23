@@ -390,6 +390,12 @@
     <ClCompile Include="btree\bt_upgrade.c">
       <Filter>c\btree</Filter>
     </ClCompile>
+    <ClCompile Include="btree\bt_walk.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\bt_cursor.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

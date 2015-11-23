@@ -665,7 +665,7 @@ static inline int __wt_page_release(WT_SESSION_IMPL* session, WT_REF* ref, uint3
 
 	/*判断是否能淘汰page, 释放的一定是最早发生读操作的page*/
 	if(page->read_gen != WT_READGEN_OLDEST || LF_ISSET(WT_READ_NO_EVICT) || F_ISSET(btree, WT_BTREE_NO_EVICTION)
-		!__wt_page_can_evict(session, page, 1)){
+		|| !__wt_page_can_evict(session, page, 1)){
 			return __wt_hazard_clear(session, page);
 	}
 

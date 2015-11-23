@@ -100,6 +100,7 @@
     <ClCompile Include="block\block_write.c" />
     <ClCompile Include="bloom\bloom.c" />
     <ClCompile Include="btree\bt_compact.c" />
+    <ClCompile Include="btree\bt_cursor.c" />
     <ClCompile Include="btree\bt_debug.c" />
     <ClCompile Include="btree\bt_delete.c" />
     <ClCompile Include="btree\bt_discard.c" />
@@ -111,6 +112,7 @@
     <ClCompile Include="btree\bt_ret.c" />
     <ClCompile Include="btree\bt_stat.c" />
     <ClCompile Include="btree\bt_upgrade.c" />
+    <ClCompile Include="btree\bt_walk.c" />
     <ClCompile Include="config\config.c" />
     <ClCompile Include="config\config_api.c" />
     <ClCompile Include="config\config_check.c" />
