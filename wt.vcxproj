@@ -100,6 +100,7 @@
     <ClCompile Include="block\block_write.c" />
     <ClCompile Include="bloom\bloom.c" />
     <ClCompile Include="btree\bt_compact.c" />
+    <ClCompile Include="btree\bt_curnext.c" />
     <ClCompile Include="btree\bt_cursor.c" />
     <ClCompile Include="btree\bt_debug.c" />
     <ClCompile Include="btree\bt_delete.c" />

@@ -85,23 +85,31 @@ struct __wt_cursor_btree
 {
 	WT_CURSOR		iface;
 	WT_BTREE*		btree;
-	WT_REF*			ref;
+	WT_REF*			ref;							/*当前page的参考信息*/
 
-	uint32_t		slot;
+	uint32_t		slot;							/*WT_COL/WT_ROW 0-based slot*/
 
-	WT_INSERT_HEAD* ins_head;
-	WT_INSERT*		ins;
-	WT_INSERT**		ins_stack[WT_SKIP_MAXDEPTH];
-	WT_INSERT*		next;
+	WT_INSERT_HEAD* ins_head;						/*insert列表头单元*/
+	WT_INSERT*		ins;							/*当前cursor指向的列表单元*/
+	WT_INSERT**		ins_stack[WT_SKIP_MAXDEPTH];	/*检索stack*/
+	WT_INSERT*		next_stack[WT_SKIP_MAXDEPTH];	/*在检索期间的下一个item存放空间*/
 	
 	uint32_t		page_deleted_count;
-	uint64_t		recno;
+	uint64_t		recno;							/*当前记录序号*/
 
+	/*
+	* The search function sets compare to:
+	*	< 1 if the found key is less than the specified key
+	*	  0 if the found key matches the specified key
+	*	> 1 if the found key is larger than the specified key
+	*/
 	int				compare;
 
 	WT_ITEM			search_key;
 	
+	/*最后一条记录的序号，因为计算variable-length 类型的列存储最后一个序号是非常麻烦的，一般是只计算一次并且存放在cache中*/
 	uint64_t		last_standard_recno;
+	/**/
 	uint32_t		row_iteration_slot;
 	
 	WT_COL*			cip_saved;

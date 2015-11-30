@@ -22,6 +22,19 @@ static inline void __cursor_pos_clear(WT_CURSOR_BTREE* cbt)
 	F_CLR(cbt, ~WT_CBT_ACTIVE);
 }
 
+/*检查是否用其他的cursor在这个session,假如没有，检查cache是否是满的，如果是满的，直接返回一个错误*/
+static inline int __cursor_enter(WT_SESSION_IMPL *session)
+{
+	/*
+	* If there are no other cursors positioned in the session, check
+	* whether the cache is full.
+	*/
+	if (session->ncursors == 0)
+		WT_RET(__wt_cache_full_check(session));
+	++session->ncursors;
+	return (0);
+}
+
 /*将session对应的cursors置为无效,假如没有激活状态的cursor，我们将释放所有为了读隔离的snapshot*/
 static inline void __cursor_leave(WT_SESSION_IMPL* session)
 {
