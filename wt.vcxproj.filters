@@ -399,6 +399,9 @@
     <ClCompile Include="btree\bt_curnext.c">
       <Filter>c\btree</Filter>
     </ClCompile>
+    <ClCompile Include="btree\bt_curprev.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
