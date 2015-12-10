@@ -115,6 +115,7 @@
     <ClCompile Include="btree\bt_stat.c" />
     <ClCompile Include="btree\bt_upgrade.c" />
     <ClCompile Include="btree\bt_walk.c" />
+    <ClCompile Include="btree\row_key.c" />
     <ClCompile Include="config\config.c" />
     <ClCompile Include="config\config_api.c" />
     <ClCompile Include="config\config_check.c" />

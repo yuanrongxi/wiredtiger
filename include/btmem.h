@@ -811,6 +811,10 @@ WT_PACKED_STRUCT_END
  * in memory, in which case the row-store page in-memory key points to a WT_IKEY
  * structure.
  */
+
+#define	WT_IKEY_DATA(ikey)						\
+	((void *)((uint8_t *)(ikey) + sizeof(WT_IKEY)))
+
 struct __wt_ikey {
 	uint32_t size;			/* Key length */
 
@@ -825,8 +829,6 @@ struct __wt_ikey {
 	uint32_t  cell_offset;
 
 	/* The key bytes immediately follow the WT_IKEY structure. */
-#define	WT_IKEY_DATA(ikey)						\
-	((void *)((uint8_t *)(ikey) + sizeof(WT_IKEY)))
 };
 
 /*
