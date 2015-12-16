@@ -775,7 +775,7 @@ WT_PACKED_STRUCT_BEGIN(__wt_col_rle)
 	uint64_t recno;			/* Record number of first repeat. */
 	uint64_t rle;			/* Repeat count. */
 	uint32_t indx;			/* Slot of entry in col_var.d */
-WT_PACKED_STRUCT_END
+WT_PACKED_STRUCT_END;
 
 /*
  * WT_COL_PTR, WT_COL_PTR_SET --
@@ -843,31 +843,30 @@ struct __wt_ikey {
  */
 WT_PACKED_STRUCT_BEGIN(__wt_update)
 	uint64_t txnid;			/* update transaction */
-
 	WT_UPDATE *next;		/* forward-linked list */
+};
 
-	/*
-	 * We use the maximum size as an is-deleted flag, which means we can't
-	 * store 4GB objects; I'd rather do that than increase the size of this
-	 * structure for a flag bit.
-	 */
+/*
+* We use the maximum size as an is-deleted flag, which means we can't
+* store 4GB objects; I'd rather do that than increase the size of this
+* structure for a flag bit.
+*/
 #define	WT_UPDATE_DELETED_ISSET(upd)	((upd)->size == UINT32_MAX)
 #define	WT_UPDATE_DELETED_SET(upd)	((upd)->size = UINT32_MAX)
-	uint32_t size;			/* update length */
+uint32_t size;			/* update length */
 
-	/* The untyped value immediately follows the WT_UPDATE structure. */
+/* The untyped value immediately follows the WT_UPDATE structure. */
 #define	WT_UPDATE_DATA(upd)						\
 	((void *)((uint8_t *)(upd) + sizeof(WT_UPDATE)))
 
-	/*
-	 * The memory size of an update: include some padding because this is
-	 * such a common case that overhead of tiny allocations can swamp our
-	 * cache overhead calculation.
-	 */
+/*
+* The memory size of an update: include some padding because this is
+* such a common case that overhead of tiny allocations can swamp our
+* cache overhead calculation.
+*/
 #define	WT_UPDATE_MEMSIZE(upd)						\
 	WT_ALIGN(sizeof(WT_UPDATE) +					\
 	    (WT_UPDATE_DELETED_ISSET(upd) ? 0 : (upd)->size), 32)
-};
 
 /*
  * WT_INSERT --

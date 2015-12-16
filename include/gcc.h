@@ -8,8 +8,8 @@
 #define WT_COMPILER_TYPE_ALIGN(x)			__attribute__((align(x)))
 
 /*定义一个__packed__对齐的struct宏对,其实就是不对齐*/
-#define WT_PACKED_STRUCT_BEGIN(name)		struct __attribute__ ((__packed__)) name {
-#define WT_PACKED_STRUCT_END				}
+#define	WT_PACKED_STRUCT_BEGIN(name) struct __attribute__ ((__packed__)) name {
+#define	WT_PACKED_STRUCT_END };
 
 #define WT_GCC_FUNC_ATTRIBUTE(x)
 #define WT_GCC_FUNC_DECL_ATTRIBUTE(x) __attribute__(x)
