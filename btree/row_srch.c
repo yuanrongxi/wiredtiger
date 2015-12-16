@@ -163,7 +163,6 @@ int __wt_row_search(WT_SESSION_IMPL* session, WT_ITEM* srch_key, WT_REF* leaf, W
 		goto leaf_only;
 	}
 
-	/**/
 	cmp = -1;
 	current = &btree->root;
 	/*对internal page做检索定位*/
@@ -192,7 +191,7 @@ restart:
 			append_check = 0;
 		}
 
-		/*用二分法进行页内定位*/
+		/*用二分法进行内部索引页内定位,定位到key对应的leaf page*/
 		base = 1;
 		limit = pindex->entries - 1;
 		if (collator == NULL){
