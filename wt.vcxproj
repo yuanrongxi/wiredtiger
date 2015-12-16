@@ -117,22 +117,8 @@
     <ClCompile Include="btree\bt_upgrade.c" />
     <ClCompile Include="btree\bt_walk.c" />
     <ClCompile Include="btree\row_key.c" />
-    <ClCompile Include="btree\row_modify.cpp">
-      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</CompileAsManaged>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-      </PrecompiledHeader>
-      <MinimalRebuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</MinimalRebuild>
-      <BasicRuntimeChecks Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Default</BasicRuntimeChecks>
-      <DebugInformationFormat Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">ProgramDatabase</DebugInformationFormat>
-      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Async</ExceptionHandling>
-      <CompileAsManaged Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</CompileAsManaged>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-      </PrecompiledHeader>
-      <MinimalRebuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</MinimalRebuild>
-      <BasicRuntimeChecks Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Default</BasicRuntimeChecks>
-      <DebugInformationFormat Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">ProgramDatabase</DebugInformationFormat>
-      <ExceptionHandling Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Async</ExceptionHandling>
-    </ClCompile>
+    <ClCompile Include="btree\row_modify.c" />
+    <ClCompile Include="btree\row_srch.c" />
     <ClCompile Include="config\config.c" />
     <ClCompile Include="config\config_api.c" />
     <ClCompile Include="config\config_check.c" />
@@ -206,9 +192,6 @@
     <ClCompile Include="test\pack_test.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="btree\row_modify.h">
-      <FileType>CppForm</FileType>
-    </ClInclude>
     <ClInclude Include="include\async.h" />
     <ClInclude Include="include\block.h" />
     <ClInclude Include="include\bloom.h" />

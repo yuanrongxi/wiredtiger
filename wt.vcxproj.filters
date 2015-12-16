@@ -405,7 +405,10 @@
     <ClCompile Include="btree\row_key.c">
       <Filter>c\btree</Filter>
     </ClCompile>
-    <ClCompile Include="btree\row_modify.cpp">
+    <ClCompile Include="btree\row_modify.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\row_srch.c">
       <Filter>c\btree</Filter>
     </ClCompile>
   </ItemGroup>
@@ -502,9 +505,6 @@
     </ClInclude>
     <ClInclude Include="include\btree.h">
       <Filter>include</Filter>
-    </ClInclude>
-    <ClInclude Include="btree\row_modify.h">
-      <Filter>c\btree</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
