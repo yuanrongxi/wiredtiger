@@ -116,6 +116,8 @@
     <ClCompile Include="btree\bt_stat.c" />
     <ClCompile Include="btree\bt_upgrade.c" />
     <ClCompile Include="btree\bt_walk.c" />
+    <ClCompile Include="btree\col_modify.c" />
+    <ClCompile Include="btree\col_srch.c" />
     <ClCompile Include="btree\row_key.c" />
     <ClCompile Include="btree\row_modify.c" />
     <ClCompile Include="btree\row_srch.c" />

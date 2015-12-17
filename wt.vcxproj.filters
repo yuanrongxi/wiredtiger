@@ -411,6 +411,12 @@
     <ClCompile Include="btree\row_srch.c">
       <Filter>c\btree</Filter>
     </ClCompile>
+    <ClCompile Include="btree\col_modify.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\col_srch.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
