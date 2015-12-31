@@ -100,6 +100,9 @@
     <None Include="include\cell.inl">
       <Filter>inl</Filter>
     </None>
+    <None Include="include\column.inl">
+      <Filter>inl</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="test\base_test.c">
@@ -415,6 +418,12 @@
       <Filter>c\btree</Filter>
     </ClCompile>
     <ClCompile Include="btree\col_srch.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\bt_sync.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\bt_ovfl.c">
       <Filter>c\btree</Filter>
     </ClCompile>
   </ItemGroup>

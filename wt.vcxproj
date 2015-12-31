@@ -79,6 +79,7 @@
     <None Include="include\btree_cmp.inl" />
     <None Include="include\buf.inl" />
     <None Include="include\cell.inl" />
+    <None Include="include\column.inl" />
     <None Include="include\cursor.inl" />
     <None Include="include\intpack.inl" />
     <None Include="include\misc.inl" />
@@ -110,10 +111,12 @@
     <ClCompile Include="btree\bt_handle.c" />
     <ClCompile Include="btree\bt_io.c" />
     <ClCompile Include="btree\bt_misc.c" />
+    <ClCompile Include="btree\bt_ovfl.c" />
     <ClCompile Include="btree\bt_page.c" />
     <ClCompile Include="btree\bt_read.c" />
     <ClCompile Include="btree\bt_ret.c" />
     <ClCompile Include="btree\bt_stat.c" />
+    <ClCompile Include="btree\bt_sync.c" />
     <ClCompile Include="btree\bt_upgrade.c" />
     <ClCompile Include="btree\bt_walk.c" />
     <ClCompile Include="btree\col_modify.c" />

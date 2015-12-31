@@ -281,7 +281,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "cursor.inl"
 
 #include "bitstring.inl"
-//#include "column.i"
+#include "column.inl"
 //#include "serial.i"
 
 #if defined(__cplusplus)
