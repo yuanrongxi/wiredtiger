@@ -426,6 +426,9 @@
     <ClCompile Include="btree\bt_ovfl.c">
       <Filter>c\btree</Filter>
     </ClCompile>
+    <ClCompile Include="btree\bt_huffman.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

@@ -156,8 +156,7 @@ static inline int __cursor_valid(WT_CURSOR_BTREE* cbt, WT_UPDATE** updp)
 		* check the cell for a record already deleted when read.
 		*/
 		cip = &page->pg_var_d[cbt->slot];
-		if ((cell = WT_COL_PTR(page, cip)) == NULL ||
-			__wt_cell_type(cell) == WT_CELL_DEL)
+		if ((cell = WT_COL_PTR(page, cip)) == NULL || __wt_cell_type(cell) == WT_CELL_DEL)
 			return 0;
 		break;
 

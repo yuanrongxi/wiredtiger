@@ -109,6 +109,7 @@
     <ClCompile Include="btree\bt_delete.c" />
     <ClCompile Include="btree\bt_discard.c" />
     <ClCompile Include="btree\bt_handle.c" />
+    <ClCompile Include="btree\bt_huffman.c" />
     <ClCompile Include="btree\bt_io.c" />
     <ClCompile Include="btree\bt_misc.c" />
     <ClCompile Include="btree\bt_ovfl.c" />
