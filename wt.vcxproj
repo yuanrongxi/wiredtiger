@@ -116,9 +116,12 @@
     <ClCompile Include="btree\bt_page.c" />
     <ClCompile Include="btree\bt_read.c" />
     <ClCompile Include="btree\bt_ret.c" />
+    <ClCompile Include="btree\bt_split.c" />
     <ClCompile Include="btree\bt_stat.c" />
     <ClCompile Include="btree\bt_sync.c" />
     <ClCompile Include="btree\bt_upgrade.c" />
+    <ClCompile Include="btree\bt_vrfy.c" />
+    <ClCompile Include="btree\bt_vrf_dsk.c" />
     <ClCompile Include="btree\bt_walk.c" />
     <ClCompile Include="btree\col_modify.c" />
     <ClCompile Include="btree\col_srch.c" />

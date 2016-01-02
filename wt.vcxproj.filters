@@ -429,6 +429,15 @@
     <ClCompile Include="btree\bt_huffman.c">
       <Filter>c\btree</Filter>
     </ClCompile>
+    <ClCompile Include="btree\bt_vrfy.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\bt_vrf_dsk.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="btree\bt_split.c">
+      <Filter>c\btree</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

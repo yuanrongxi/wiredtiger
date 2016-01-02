@@ -12,7 +12,7 @@
 #define WT_ORDERED_READ(v, val) do{ \
 	(v) = (val); \
 	WT_READ_BARRIER(); \
-}
+}while(0)
 
 /*对p的flags进行mask位过滤，并得到过滤后的值*/
 #define	F_ISSET_ATOMIC(p, mask)	((p)->flags_atomic & (uint8_t)(mask))
