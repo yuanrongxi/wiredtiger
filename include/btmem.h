@@ -659,14 +659,14 @@ struct __wt_page_deleted {
  * it's OK to dereference the pointer to the page.
  */
 struct __wt_ref {
-	WT_PAGE *page;			/* Page */
+	WT_PAGE *page;			/* Page,refÖ¸ÏòµÄpage */
 
 	/*
 	 * When the tree deepens as a result of a split, the home page value
 	 * changes.  Don't cache it, we need to see that change when looking
 	 * up our slot in the page's index structure.
 	 */
-	WT_PAGE * volatile home;	/* Reference page */
+	WT_PAGE * volatile home;	/* Reference page,¸¸Ç×page */
 	uint32_t ref_hint;		/* Reference page index hint */
 
 	volatile WT_PAGE_STATE state;	/* Page state */

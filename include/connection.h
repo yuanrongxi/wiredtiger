@@ -143,7 +143,7 @@ struct __wt_connection_impl
 
 
 	WT_FH*						lock_fh;			/*lock file handle*/
-	volatile uint64_t			split_gen;
+	volatile uint64_t			split_gen;			/*垃圾回收的阈值，小于这个阈值的session相关的buf都可以释放*/
 
 	SLIST_HEAD(__wt_dhhash, __wt_data_handle) dhhash[WT_HASH_ARRAY_SIZE];
 	/* Locked: data handle list */

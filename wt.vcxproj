@@ -85,6 +85,7 @@
     <None Include="include\misc.inl" />
     <None Include="include\mutex.inl" />
     <None Include="include\packing.inl" />
+    <None Include="include\serial.inl" />
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>

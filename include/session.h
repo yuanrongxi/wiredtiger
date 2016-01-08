@@ -98,12 +98,12 @@ struct __wt_session_impl
 		uint64_t			split_gen;
 		void*				p;
 		size_t				len;
-	} *split_stash;
+	} *split_stash;						/*当前等待释放的缓冲区*/
 
-	size_t					split_stash_cnt;
-	size_t					split_stash_alloc;
+	size_t					split_stash_cnt;	/*等待释放缓冲区的个数*/
+	size_t					split_stash_alloc;  /*本session分配总的缓冲区数量*/
 
-	uint64_t				split_gen;
+	uint64_t				split_gen;		/*垃圾回收标示值*/
 
 #define	WT_SESSION_FIRST_USE(s)		((s)->hazard == NULL)
 #define WT_HAZARD_INCR		10
