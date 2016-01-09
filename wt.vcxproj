@@ -117,6 +117,7 @@
     <ClCompile Include="btree\bt_page.c" />
     <ClCompile Include="btree\bt_read.c" />
     <ClCompile Include="btree\bt_ret.c" />
+    <ClCompile Include="btree\bt_slvg.c" />
     <ClCompile Include="btree\bt_split.c" />
     <ClCompile Include="btree\bt_stat.c" />
     <ClCompile Include="btree\bt_sync.c" />

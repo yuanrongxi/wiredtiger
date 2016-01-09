@@ -208,7 +208,7 @@ WT_UPDATE* __wt_update_obsolete_check(WT_SESSION_IMPL *session, WT_UPDATE *upd)
 			first = NULL;
 	}
 
-	/*截掉所有第一个不为空的upd*/
+	/*截掉所有最后一个不为空的upd并且TXNID = WT_TXN_ABORTED，而且这个upd对所有事务不可见*/
 	if(first != NULL &&& (next = first->next) != NULL && WT_ATOMIC_CAS8(first->next, next, NULL))
 		return next;
 
