@@ -106,6 +106,9 @@
     <None Include="include\serial.inl">
       <Filter>inl</Filter>
     </None>
+    <None Include="include\cache.inl">
+      <Filter>inl</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="test\base_test.c">

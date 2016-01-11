@@ -78,6 +78,7 @@
     <None Include="include\btree.inl" />
     <None Include="include\btree_cmp.inl" />
     <None Include="include\buf.inl" />
+    <None Include="include\cache.inl" />
     <None Include="include\cell.inl" />
     <None Include="include\column.inl" />
     <None Include="include\cursor.inl" />
