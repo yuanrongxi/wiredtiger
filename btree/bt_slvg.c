@@ -197,11 +197,11 @@ int __wt_bt_salvage(WT_SESSION_IMPL* session, WT_CKPT* ckptbase, const char* cfg
 	 * Add unreferenced overflow page blocks to the free list so they are
 	 * reused immediately.
 	 */
-
+	/*先清除掉没有关联的ovfl pages*/
 	WT_ERR(__slvg_ovfl_reconcile(session, ss));
 	WT_ERR(__slvg_ovfl_discard(session, ss));
 
-	/*第5步:对pages list按KEY/LSN做排序*/
+	/*第5步:对pages list按KEY/LSN做排序，计算并去掉page之间的重叠的区域，相当于范围结构调整*/
 	qsort(ss->pages, (size_t)ss->pages_next, sizeof(WT_TRACK *), __slvg_trk_compare_key);
 	if(ss->page_type == WT_PAGE_ROW_LEAF)
 		WT_ERR(__slvg_row_range(session, ss));
@@ -417,6 +417,12 @@ static int __slvg_trk_init(WT_SESSION_IMPL* session, uint8_t* addr, size_t addr_
 
 	*retp = trk;
 	return 0;
+
+err:	
+	__wt_free(session, trk->trk_addr);
+	__wt_free(session, trk->shared);
+	__wt_free(session, trk);
+	return ret;
 }
 
 /*创建一个WT_TRACK对象，并且进行初始化赋值,这个对象和orig共享一个SS*/
@@ -912,7 +918,7 @@ static int __slvg_col_build_internal(WT_SESSION_IMPL* session, uint32_t leaf_cnt
 			continue;
 
 		/*设置ref的值*/
-		ref = *refp++;
+		ref = *refp++;		/*refp是internal page中的一个entry指针*/
 		ref->home = page;
 		ref->page = NULL;
 
@@ -983,7 +989,7 @@ static int __slvg_col_build_leaf(WT_SESSION_IMPL* session, WT_TRACK* trk, WT_REF
 	/*中间没有空隙区，那么pg_var_recno应该和col_start相等*/
 	if(trk->col_missing == 0)
 		page->pg_var_recno = trk->col_start;
-	else{
+	else{/*这里把空隙区也纳入page中，在cookie中标示了一个空隙区长度*/
 		page->pg_var_recno = trk->col_missing;
 		cookie->missing = trk->col_start - trk->col_missing;
 		WT_ERR(__wt_verbose(session, WT_VERB_SALVAGE,
@@ -1677,5 +1683,314 @@ static int __slvg_row_ovfl(WT_SESSION_IMPL *session, WT_TRACK *trk, WT_PAGE *pag
 	}
 	return 0;
 }
+
+/*bsearch的比较函数,其实就是对block addr内容的比较*/
+static int WT_CDECL __slvg_ovfl_compare(const void* a, const void* b)
+{
+	WT_ADDR *addr;
+	WT_DECL_RET;
+	WT_TRACK *trk;
+	size_t len;
+
+	addr = (WT_ADDR *)a;
+	trk = *(WT_TRACK **)b;
+
+	len = WT_MIN(trk->trk_addr_size, addr->size);
+	ret = memcmp(addr->addr, trk->trk_addr, len);
+	if (ret == 0 && addr->size != trk->trk_addr_size)
+		ret = addr->size < trk->trk_addr_size ? -1 : 1;
+
+	return ret;
+}
+
+/*将没有和leaf page做reference的ovfl page释放,这里会对整个leaf pages做关系关联扫描*/
+static int __slvg_ovfl_reconcile(WT_SESSION_IMPL* session, WT_STUFF* ss)
+{
+	WT_ADDR *addr;
+	WT_DECL_RET;
+	WT_TRACK **searchp, *trk;
+	uint32_t i, j, *slot;
+
+	slot = NULL;
+
+	/*leaf page按照lsn做从大小排序， overflow page按照block addr cookie大小排序*/
+	qsort(ss->pages, (size_t)ss->pages_next, sizeof(WT_TRACK *), __slvg_trk_compare_gen);
+	qsort(ss->ovfl, (size_t)ss->ovfl_next, sizeof(WT_TRACK *), __slvg_trk_compare_addr);
+
+	for (i = 0; i < ss->pages_next; ++i){
+		if ((trk = ss->pages[i]) == NULL || trk->trk_ovfl_cnt == 0)
+			continue;
+
+		WT_ERR(__wt_calloc_def(session, trk->trk_ovfl_cnt, &slot));
+		for (j = 0; j < trk->trk_ovfl_cnt; ++j) {
+			addr = &trk->trk_ovfl_addr[j];
+			/*在overflow array中查找page的block addr cookie对应的overflow page*/
+			searchp = bsearch(addr, ss->ovfl, ss->ovfl_next, sizeof(WT_TRACK *), __slvg_ovfl_compare);
+
+			/*
+			* If the overflow page doesn't exist or if another page
+			* has already claimed it, this leaf page isn't usable.
+			*/
+			if (searchp != NULL && !F_ISSET(*searchp, WT_TRACK_OVFL_REFD)){ /*overflow page是有效可用的，不做清理*/
+				slot[j] = (uint32_t)(searchp - ss->ovfl);
+				F_SET(*searchp, WT_TRACK_OVFL_REFD);
+				continue;
+			}
+
+			/*提示overflow page不可用*/
+			WT_ERR(__wt_verbose(session, WT_VERB_SALVAGE,
+				"%s references unavailable overflow page %s",
+				__wt_addr_string(session, trk->trk_addr, trk->trk_addr_size, ss->tmp1),
+				__wt_addr_string(session, addr->addr, addr->size, ss->tmp2)));
+
+			/*清除ovfl page的referenced标示*/
+			while (j > 0){
+				F_CLR(ss->ovfl[slot[--j]], WT_TRACK_OVFL_REFD);
+			}
+
+			trk = NULL;
+			WT_ERR(__slvg_trk_free(session, &ss->pages[i], 1));
+			break;
+		}
+
+		/*释放掉slot,因为slot是临时做ovfl array关联用的，正在检查的page在ovfl array中有N个ovfl item,每个ovfl item对应一个ovfl page*/
+		if (trk == NULL)
+			__wt_free(session, slot);
+		else{
+			__slvg_trk_free_addr(session, trk);
+			trk->trk_ovfl_slot = slot;
+			slot = NULL;
+		}
+	}
+
+	return 0;
+
+err:
+	__wt_free(session, slot);
+	return ret;
+}
+
+/*比较两个WT_TRACK之间的大小，先比较KEY，如果KEY相等，再比较LSN*/
+static int WT_CDECL __slvg_trk_compare_key(const void *a, const void *b)
+{
+	WT_SESSION_IMPL *session;
+	WT_TRACK *a_trk, *b_trk;
+	uint64_t a_gen, a_recno, b_gen, b_recno;
+	int cmp;
+
+	a_trk = *(WT_TRACK **)a;
+	b_trk = *(WT_TRACK **)b;
+
+	if (a_trk == NULL)
+		return (b_trk == NULL ? 0 : 1);
+	if (b_trk == NULL)
+		return -1;
+
+	switch (a_trk->ss->page_type) {
+	case WT_PAGE_COL_FIX:
+	case WT_PAGE_COL_VAR:
+		a_recno = a_trk->col_start;
+		b_recno = b_trk->col_start;
+		if (a_recno == b_recno)
+			break;
+		if (a_recno > b_recno)
+			return 1;
+		if (a_recno < b_recno)
+			return -1;
+		break;
+	case WT_PAGE_ROW_LEAF:
+		/*
+		* XXX
+		* __wt_compare can potentially fail, and we're ignoring that
+		* error because this routine is called as an underlying qsort
+		* routine.
+		*/
+		session = a_trk->ss->session;
+		(void)__wt_compare(session, S2BT(session)->collator, &a_trk->row_start, &b_trk->row_start, &cmp);
+		if (cmp != 0)
+			return (cmp);
+		break;
+	}
+
+	/*
+	* If the primary keys compare equally, differentiate based on LSN.
+	* Sort from highest LSN to lowest, that is, the earlier pages in
+	* the array are more desirable.
+	*/
+	a_gen = a_trk->trk_gen;
+	b_gen = b_trk->trk_gen;
+	return (a_gen > b_gen ? -1 : (a_gen < b_gen ? 1 : 0));
+}
+
+/*比较两个WT_TRACK对象的LSN大小*/
+static int WT_CDECL __slvg_trk_compare_gen(const void* a, const void* b)
+{
+	WT_TRACK *a_trk, *b_trk;
+	uint64_t a_gen, b_gen;
+
+	a_trk = *(WT_TRACK **)a;
+	b_trk = *(WT_TRACK **)b;
+
+	/*
+	* Sort from highest LSN to lowest, that is, the earlier pages in the
+	* array are more desirable.
+	*/
+	a_gen = a_trk->trk_gen;
+	b_gen = b_trk->trk_gen;
+	return (a_gen > b_gen ? -1 : (a_gen < b_gen ? 1 : 0));
+}
+
+/*清理merge状态的WT_TRACK对应文件和overflow block(merge状态的block)*/
+static int __slvg_merge_block_free(WT_SESSION_IMPL *session, WT_STUFF *ss)
+{
+	WT_TRACK *trk;
+	uint32_t i;
+
+	/* Free any underlying file blocks for merged pages. */
+	for (i = 0; i < ss->pages_next; ++i) {
+		if ((trk = ss->pages[i]) == NULL)
+			continue;
+		if (F_ISSET(trk, WT_TRACK_MERGE))
+			WT_RET(__slvg_trk_free(session, &ss->pages[i], 1));
+	}
+
+	/* Free any unused overflow records. */
+	return (__slvg_ovfl_discard(session, ss));
+}
+
+/*将ovfl page对应的WT_TRACK对象的状态设置为WT_TRACK_OVFL_REFD，表示已经关联了reference*/
+static int __slvg_ovfl_ref(WT_SESSION_IMPL* session, WT_TRACK* trk, int multi_panic)
+{
+	if (F_ISSET(trk, WT_TRACK_OVFL_REFD)){
+		if (!multi_panic)
+			return (EBUSY);
+
+		WT_PANIC_RET(session, EINVAL, "overflow record unexpectedly referenced multiple times during leaf page merge");
+	}
+
+	F_ISSET(trk, WT_TRACK_OVFL_REFD);
+
+	return 0;
+}
+
+/*将WT_TRACK对象中所有ovfl page做reference关联*/
+static int __slvg_ovfl_ref_all(WT_SESSION_IMPL *session, WT_TRACK *trk)
+{
+	uint32_t i;
+
+	for (i = 0; i < trk->trk_ovfl_cnt; ++i)
+		WT_RET(__slvg_ovfl_ref(session, trk->ss->ovfl[trk->trk_ovfl_slot[i]], 1));
+
+	return 0;
+}
+
+/*废弃不用的ovfl page*/
+static int __slvg_ovfl_discard(WT_SESSION_IMPL* session, WT_STUFF* ss)
+{
+	WT_TRACK *trk;
+	uint32_t i;
+
+	for (i = 0; i < ss->ovfl_next; ++i){
+		if ((trk = ss->ovfl[i]) == NULL)
+			continue;
+
+		/*清除reference关联*/
+		if (F_ISSET(trk, WT_TRACK_OVFL_REFD)) {
+			F_CLR(trk, WT_TRACK_OVFL_REFD);
+			continue;
+		}
+
+		WT_RET(__wt_verbose(session, WT_VERB_SALVAGE, "%s unused overflow page",
+			__wt_addr_string(session, trk->trk_addr, trk->trk_addr_size, ss->tmp1)));
+
+		/*释放WT_TRACK对象*/
+		WT_RET(__slvg_trk_free(session, &ss->ovfl[i], 1));
+	}
+
+	return 0;
+}
+
+/*对WT_STUFF结构中的pages做释放*/
+static int __slvg_cleanup(WT_SESSION_IMPL *session, WT_STUFF *ss)
+{
+	uint32_t i;
+
+	/* Discard the leaf page array. */
+	for (i = 0; i < ss->pages_next; ++i)
+		if (ss->pages[i] != NULL)
+			WT_RET(__slvg_trk_free(session, &ss->pages[i], 0));
+	__wt_free(session, ss->pages);
+
+	/* Discard the ovfl page array. */
+	for (i = 0; i < ss->ovfl_next; ++i)
+		if (ss->ovfl[i] != NULL)
+			WT_RET(__slvg_trk_free(session, &ss->ovfl[i], 0));
+	__wt_free(session, ss->ovfl);
+
+	return 0;
+}
+
+/*释放WT_TRACK中所有ovfl addr对象*/
+static void __slvg_trk_free_addr(WT_SESSION_IMPL* session, WT_TRACK* trk)
+{
+	uint32_t i;
+
+	if (trk->trk_ovfl_addr != NULL) {
+		for (i = 0; i < trk->trk_ovfl_cnt; ++i)
+			__wt_free(session, trk->trk_ovfl_addr[i].addr);
+		__wt_free(session, trk->trk_ovfl_addr);
+	}
+}
+
+/*释放WT_TRACK对应page的block块*/
+static int __slvg_trk_free_block(WT_SESSION_IMPL* session, WT_TRACK* trk)
+{
+	WT_BM *bm;
+
+	bm = S2BT(session)->bm;
+
+	WT_RET(__wt_verbose(session, WT_VERB_SALVAGE,
+		"%s blocks discarded: discard freed file bytes %" PRIu32,
+		__wt_addr_string(session, trk->trk_addr, trk->trk_addr_size, trk->ss->tmp1), trk->trk_size));
+
+	return (bm->free(bm, session, trk->trk_addr, trk->trk_addr_size));
+}
+
+/*释放trkp对应的WT_TRACK对象*/
+static int __slvg_trk_free(WT_SESSION_IMPL *session, WT_TRACK **trkp, int free_on_last_ref)
+{
+	WT_TRACK *trk;
+
+	trk = *trkp;
+	*trkp = NULL;
+
+	WT_ASSERT(session, trk->shared->ref > 0);
+
+	/*引用计数 = 0，表示WT_TRACK对象可以释放*/
+	if (--trk->shared->ref == 0){
+		if (free_on_last_ref)
+			WT_RET(__slvg_trk_free_block(session, trk));
+
+		__wt_free(session, trk->trk_addr);
+
+		__slvg_trk_free_addr(session, trk);
+
+		__wt_free(session, trk->trk_ovfl_slot);
+
+		__wt_free(session, trk->shared);
+	}
+
+	/*释放row store是的start/stop key,这2个参数是在构建WT_TRACK是分配的*/
+	if (trk->ss->page_type == WT_PAGE_ROW_LEAF) {
+		__wt_buf_free(session, &trk->row_start);
+		__wt_buf_free(session, &trk->row_stop);
+	}
+
+	__wt_free(session, trk);
+
+	return 0;
+}
+
+
 
 

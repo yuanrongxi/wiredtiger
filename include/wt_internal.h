@@ -245,7 +245,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "bloom.h"
 #include "btmem.h"
 #include "btree.h"
-//#include "cache.h"
+#include "cache.h"
 #include "config.h"
 #include "compact.h"
 #include "cursor.h"
@@ -270,7 +270,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "misc.inl"
 #include "intpack.inl"			
 #include "packing.inl"
-//#include "cache.i"			
+#include "cache.inl"			
 #include "cell.inl"			
 
 #include "mutex.inl"			

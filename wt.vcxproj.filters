@@ -539,5 +539,8 @@
     <ClInclude Include="include\btree.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\cache.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
