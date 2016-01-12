@@ -58,6 +58,9 @@
     <Filter Include="c\btree">
       <UniqueIdentifier>{f9c031b5-3992-4237-b305-41ad3239fc52}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\evict">
+      <UniqueIdentifier>{1a01a692-2bdf-4728-8a14-6c137c68dffe}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -446,6 +449,9 @@
     </ClCompile>
     <ClCompile Include="btree\bt_slvg.c">
       <Filter>c\btree</Filter>
+    </ClCompile>
+    <ClCompile Include="evict\evict_lru.c">
+      <Filter>c\evict</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
