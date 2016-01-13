@@ -604,7 +604,7 @@ static inline int __wt_page_can_evict(WT_SESSION_IMPL* session, WT_PAGE* page, i
 	if (page->read_gen != WT_READGEN_OLDEST && !__wt_txn_visible_all(session, __wt_page_is_modified(page) ? mod->update_txn : mod->rec_max_txn))
 		return 0;
 
-	/*这个page刚才发生了split操作，不能立即进行淘汰，而是通过viction thread进行淘汰slipt*/
+	/*这个page刚才发生了split操作，不能立即进行淘汰，而是通过eviction thread进行淘汰slipt*/
 	if (check_splits && !__wt_txn_visible_all(session, mod->inmem_split_txn))
 		return 0;
 

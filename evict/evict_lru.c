@@ -611,7 +611,7 @@ void __wt_evict_file_exclusive_off(WT_SESSION_IMPL *session)
 	F_CLR(btree, WT_BTREE_NO_EVICTION);
 }
 
-/* 从lru queue中evict page */
+/* 从lru queue中evict所有的evict pages */
 static int __evict_lru_pages(WT_SESSION_IMPL *session, int is_server)
 {
 	WT_DECL_RET;
@@ -891,5 +891,322 @@ static void __evict_init_candidate(WT_SESSION_IMPL* session, WT_EVICT_ENTRY* evi
 	F_SET_ATOMIC(ref->page, WT_PAGE_EVICT_LRU);
 }
 
+/*根据session对应btree的evict_ref进行btree，把符合evict条件的page添加到evict lru list当中*/
+static int __evict_walk_file(WT_SESSION_IMPL* session, u_int* slotp, uint32_t flags)
+{
+	WT_BTREE *btree;
+	WT_CACHE *cache;
+	WT_DECL_RET;
+	WT_EVICT_ENTRY *end, *evict, *start;
+	WT_PAGE *page;
+	WT_PAGE_MODIFY *mod;
+	WT_REF *ref;
+	uint64_t pages_walked;
+	uint32_t walk_flags;
+	int enough, internal_pages, modified, restarts;
 
+	btree = S2BT(session);
+	cache = S2C(session)->cache;
+
+	/*最多evict 10个page*/
+	start = cache->evict + *slotp;
+	end = WT_MIN(start + WT_EVICT_WALK_PER_FILE, cache->evict + cache->evict_slots);
+
+	enough = internal_pages = restarts = 0;
+
+	walk_flags = WT_READ_CACHE | WT_READ_NO_EVICT | WT_READ_NO_GEN | WT_READ_NO_WAIT;
+
+	/*遍历btree，获得evict page*/
+	for (evict = start, pages_walked = 0; evict < end && !enough && (ret == 0 || ret == WT_NOTFOUND);
+		ret = __wt_tree_walk(session, &btree->evict_ref, &pages_walked, walk_flags)){
+		enough = (pages_walked > WT_EVICT_MAX_PER_FILE);
+		ref = btree->evict_ref;
+		if (ret == NULL){
+			if (++restarts == 2 || enough)
+				break;
+			continue;
+		}
+		/*root page不能被evict*/
+		if (__wt_is_root(ref))
+			continue;
+
+		page = ref->page;
+		modified = __wt_page_is_modified(page);
+
+		/*
+		* Use the EVICT_LRU flag to avoid putting pages onto the list
+		* multiple times.
+		*/
+		if (F_ISSET_ATOMIC(page, WT_PAGE_EVICT_LRU))
+			continue;
+
+		if (__wt_page_is_empty(page))
+			goto fast;
+		
+		/*不是脏页，而且evict操作是指定evict脏页数据，所以跳过这个page即可*/
+		if (!modified && LF_ISSET(WT_EVICT_PASS_DIRTY))
+			continue;
+
+		/*
+		* If we are only trickling out pages marked for definite
+		* eviction, skip anything that isn't marked.
+		*/
+		if (LF_ISSET(WT_EVICT_PASS_WOULD_BLOCK) && page->read_gen != WT_READGEN_OLDEST)
+			continue;
+
+		/* Limit internal pages to 50% unless we get aggressive. */
+		if (WT_PAGE_IS_INTERNAL(page) && ++internal_pages > WT_EVICT_WALK_PER_FILE / 2 && !LF_ISSET(WT_EVICT_PASS_AGGRESSIVE))
+			continue;
+
+		/*
+		* If this page has never been considered for eviction,
+		* set its read generation to a little bit in the
+		* future and move on, give readers a chance to start
+		* updating the read generation.
+		* page不能淘汰，将他的read_gen设置的和cache一直，防止淘汰判断
+		*/
+		if (page->read_gen == WT_READGEN_NOTSET){
+			page->read_gen = __wt_cache_read_gen_set(session);
+			continue;
+		}
+
+fast:
+		/*假如page不符合evict条件，跳过*/
+		if (!__wt_page_can_evict(session, page, 1))
+			continue;
+
+		/*
+		* If the page is clean but has modifications that appear too
+		* new to evict, skip it.
+		*
+		* Note: take care with ordering: if we detected that the page
+		* is modified above, we expect mod != NULL.
+		*/
+		mod = page->modify;
+		if (!modified && mod != NULL && !LF_ISSET(WT_EVICT_PASS_AGGRESSIVE | WT_EVICT_PASS_WOULD_BLOCK) && !__wt_txn_visible_all(session, mod->rec_max_txn))
+			continue;
+
+		/*
+		* If the oldest transaction hasn't changed since the last time
+		* this page was written, it's unlikely that we can make
+		* progress.  Similarly, if the most recent update on the page
+		* is not yet globally visible, eviction will fail.  These
+		* heuristics attempt to avoid repeated attempts to evict the
+		* same page.
+		*
+		* That said, if eviction is stuck, or we are helping with
+		* forced eviction, try anyway: maybe a transaction that was
+		* running last time we wrote the page has since rolled back,
+		* or we can help get the checkpoint completed sooner.
+		*/
+		if (modified && !LF_ISSET(WT_EVICT_PASS_AGGRESSIVE | WT_EVICT_PASS_WOULD_BLOCK) &&
+			(mod->disk_snap_min == S2C(session)->txn_global.oldest_id || !__wt_txn_visible_all(session, mod->update_txn)))
+			continue;
+
+		/*将evict page加入到evict lru list当中*/
+		WT_ASSERT(session, evict->ref == NULL);
+		__evict_init_candidate(session, evict, ref);
+		++evict;
+
+		WT_RET(__wt_verbose(session, WT_VERB_EVICTSERVER, "select: %p, size %" PRIu64, page, page->memory_footprint));
+	}
+
+	/*
+	* If we happen to end up on the root page, clear it.  We have to track
+	* hazard pointers, and the root page complicates that calculation.
+	*
+	* Also clear the walk if we land on a page requiring forced eviction.
+	* The eviction server may go to sleep, and we want this page evicted
+	* as quickly as possible.
+	*/
+	ref = btree->evict_ref;
+	if (ref != NULL && (__wt_ref_is_root(ref) || ref->page->read_gen == WT_READGEN_OLDEST)){
+		btree->evict_ref = NULL;
+		__wt_page_release(session, ref, 0);
+	}
+
+	if (ret == WT_NOTFOUND)
+		ret = 0;
+
+	*slotp += (u_int)(evict - start);
+	WT_STAT_FAST_CONN_INCRV(session, cache_eviction_walk, pages_walked);
+
+	return ret;
+}
+
+/*从evict queue获取一个evict page的ref*/
+static int _evict_get_ref(WT_SESSION_IMPL *session, int is_server, WT_BTREE **btreep, WT_REF **refp)
+{
+	WT_CACHE *cache;
+	WT_EVICT_ENTRY *evict;
+	uint32_t candidates;
+	WT_DECL_SPINLOCK_ID(id);			/* Must appear last */
+
+	cache = S2C(session)->cache;
+	*btreep = NULL;
+	*refp = NULL;
+
+	/*在cache->evict_current有效时，获得evict_lock锁，整个过程是spin wait*/
+	for (;;){
+		if (cache->evict_current == NULL)
+			return WT_NOTFOUND;
+		if (__wt_spin_trylock(session, &cache->evict_lock, &id) == 0)
+			break;
+
+		__wt_yield();
+	}
+
+	/*先evict out 一半数量的page??*/
+	candidates = cache->evict_candidates;
+	if (is_server && candidates > 1)
+		candidates /= 2;
+
+	/*从evict queue中获取page*/
+	while ((evict = cache->evict_current) != NULL && evict < cache->evict + candidates && evict->ref != NULL){
+		WT_ASSERT(session, evict->btree != NULL);
+		++cache->evict_current;
+
+		/*
+		* Lock the page while holding the eviction mutex to prevent
+		* multiple attempts to evict it.  For pages that are already
+		* being evicted, this operation will fail and we will move on.
+		* 尝试将ref对应的page进行lock,如果不成功，也许这个page已经被evcit,
+		* 直接将这个page从evict lru list中清除出去
+		*/
+		if (!WT_ATOMIC_CAS4(evict->ref->state, WT_REF_MEM, WT_REF_LOCKED)){
+			__evict_list_clear(session, evict);
+			continue;
+		}
+
+		/*增加evict busy计数器，防止btree handle被关闭*/
+		(void*)WT_ATOMIC_ADD4(evict->btree->evict_busy, 1);
+
+		/*已经获得一个evict page*/
+		*btreep = evict->btree;
+		refp = evict->ref;
+		__evict_list_clear(session, evict);
+
+		break;
+	}
+	/*evict queue没有evict page,直接将evict_current设成NULL*/
+	if (evict >= cache->evict + cache->evict_candidates)
+		cache->evict_current = NULL;
+
+	__wt_spin_unlock(session, &cache->evict_lock);
+
+	return ((*refp == NULL) ? WT_NOTFOUND : 0);
+}
+
+/*从evict queue中获取一个page,并evict这个page*/
+int __wt_evict_lru_page(WT_SESSION_IMPL* session, int is_server)
+{
+	WT_BTREE *btree;
+	WT_CACHE *cache;
+	WT_DECL_RET;
+	WT_PAGE *page;
+	WT_REF *ref;
+
+	WT_RET(_evict_get_ref(session, is_server, &btree, &ref));
+	WT_ASSERT(session, ref->state == WT_REF_LOCKED);
+	/*
+	 * An internal session flags either the server itself or an eviction
+	 * worker thread.
+	 */
+	if (F_ISSET(session, WT_SESSION_INTERNAL)){
+		if (is_server)
+			WT_STAT_FAST_CONN_INCR(session, cache_eviction_server_evicting);
+		else
+			WT_STAT_FAST_CONN_INCR(session, cache_eviction_worker_evicting);
+	}
+	else
+		WT_STAT_FAST_CONN_INCR(session, cache_eviction_app);
+
+	/*
+	* In case something goes wrong, don't pick the same set of pages every
+	* time.
+	*
+	* We used to bump the page's read generation only if eviction failed,
+	* but that isn't safe: at that point, eviction has already unlocked
+	* the page and some other thread may have evicted it by the time we
+	* look at it.
+	*/
+	page = ref->page;
+	if (page->read_gen != WT_READGEN_OLDEST)
+		page->read_gen = __wt_cache_read_gen_set(session);
+
+	/*对page进行evict操作*/
+	WT_WITH_BTREE(session, btree, ret = __wt_evict_page(session, ref));
+	/*完成evict操作，evict_busy计数递减*/
+	(void)WT_ATOMIC_SUB4(btree->evict_busy, 1);
+
+	WT_RET(ret);
+
+	cache = S2C(session)->cache;
+	if (F_ISSET(cache, WT_CACHE_STUCK))
+		F_CLR(cache, WT_CACHE_STUCK);
+
+	return ret;
+}
+
+int __wt_cache_wait(WT_SESSION_IMPL* session, int full)
+{
+	WT_CACHE *cache;
+	WT_DECL_RET;
+	WT_TXN_GLOBAL *txn_global;
+	WT_TXN_STATE *txn_state;
+	int busy, count;
+
+	cache = S2C(session)->cache;
+
+	/*
+	* If the current transaction is keeping the oldest ID pinned, it is in
+	* the middle of an operation.	This may prevent the oldest ID from
+	* moving forward, leading to deadlock, so only evict what we can.
+	* Otherwise, we are at a transaction boundary and we can work harder
+	* to make sure there is free space in the cache.
+	* 这块没有完全理解，和事务有关系，需要仔细分析
+	*/
+	txn_global = &S2C(session)->txn_global;
+	txn_state = &(txn_global->states[session->id]);
+	busy = (txn_state->id != WT_TXN_NONE || session->nhazard > 0 || (txn_state->snap_min != WT_TXN_NONE && txn_global->current != txn_global->oldest_id));
+	if (busy && full < 100)
+		return 0;
+
+	count = busy ? 1 : 10;
+
+	for (;;){
+		/*
+		* A pathological case: if we're the oldest transaction in the
+		* system and the eviction server is stuck trying to find space,
+		* abort the transaction to give up all hazard pointers before
+		* trying again.
+		* 如果evict是个最早的事务，那么会导致系统中所有其他的事务等待这个事务，
+		* 造成stuck状态，那么我们在evction server再次尝试之前放弃掉这个事务，
+		* 防止系统等待太久
+		*/
+		if (F_ISSET(cache, WT_CACHE_STUCK) && __wt_txn_am_oldest(session)) {
+			F_CLR(cache, WT_CACHE_STUCK);
+			WT_STAT_FAST_CONN_INCR(session, txn_fail_cache);
+			return WT_ROLLBACK;
+		}
+
+		/*从evict queue中获取一个evict page进行evict操作*/
+		ret = __wt_evict_lru_page(session, 0);
+		switch (ret){
+		case 0: /*成功了，继续下一个*/
+			if (--count == 0)
+				return (0);
+			break;
+
+		case EBUSY:
+			continue;
+
+		case WT_NOTFOUND:
+			break;
+
+		default:
+			return ret;
+		}
+	}
+}
 

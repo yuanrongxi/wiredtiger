@@ -177,7 +177,7 @@ struct __wt_connection_impl
 	WT_CACHE*						cache;
 	uint64_t						cache_size;
 
-	//WT_TXN_GLOBAL					txn_global;
+	WT_TXN_GLOBAL					txn_global;
 
 	WT_SPINLOCK						hot_backup_lock;	/* Hot backup serialization */
 	int								hot_backup;

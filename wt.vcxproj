@@ -146,6 +146,7 @@
     <ClCompile Include="cursor\cur_log.c" />
     <ClCompile Include="cursor\cur_stat.c" />
     <ClCompile Include="cursor\cur_std.c" />
+    <ClCompile Include="evict\evict_file.c" />
     <ClCompile Include="evict\evict_lru.c" />
     <ClCompile Include="log\log.c" />
     <ClCompile Include="log\log_auto.c" />
