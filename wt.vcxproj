@@ -148,6 +148,7 @@
     <ClCompile Include="cursor\cur_std.c" />
     <ClCompile Include="evict\evict_file.c" />
     <ClCompile Include="evict\evict_lru.c" />
+    <ClCompile Include="evict\evict_page.c" />
     <ClCompile Include="log\log.c" />
     <ClCompile Include="log\log_auto.c" />
     <ClCompile Include="log\log_slot.c" />

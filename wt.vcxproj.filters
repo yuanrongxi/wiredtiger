@@ -456,6 +456,9 @@
     <ClCompile Include="evict\evict_file.c">
       <Filter>c\evict</Filter>
     </ClCompile>
+    <ClCompile Include="evict\evict_page.c">
+      <Filter>c\evict</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
