@@ -257,7 +257,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "meta.h"
 #include "os.h"
 //#include "schema.h"
-//#include "txn.h"
+#include "txn.h"
 
 #include "session.h"
 #include "connection.h"
@@ -274,7 +274,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "cell.inl"			
 
 #include "mutex.inl"			
-//#include "txn.i"			
+#include "txn.inl"			
 
 #include "btree.inl"			
 #include "btree_cmp.inl"

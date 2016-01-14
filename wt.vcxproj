@@ -87,6 +87,7 @@
     <None Include="include\mutex.inl" />
     <None Include="include\packing.inl" />
     <None Include="include\serial.inl" />
+    <None Include="include\txn.inl" />
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
@@ -234,6 +235,7 @@
     <ClInclude Include="include\queue.h" />
     <ClInclude Include="include\session.h" />
     <ClInclude Include="include\stat.h" />
+    <ClInclude Include="include\txn.h" />
     <ClInclude Include="include\verify_build.h" />
     <ClInclude Include="include\wiredtiger.h" />
     <ClInclude Include="include\wiredtiger_config.h" />

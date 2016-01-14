@@ -50,7 +50,7 @@ struct __wt_session_impl
 	WT_CURSOR_BACKUP*		bkp_cursor;
 	WT_COMPACT*				compact;
 
-	WT_DATA_HANDLE*			meta_handle;
+	WT_DATA_HANDLE*			meta_dhandle;
 	void*					meta_track;
 	void*					meta_track_next;
 	void*					meta_track_sub;
@@ -65,8 +65,8 @@ struct __wt_session_impl
 
 	WT_ITEM					err;
 
-	//TODO:WT_TXN_ISOLATION		isolation;
-	//WT_TXN					txn;
+	WT_TXN_ISOLATION		isolation;
+	WT_TXN					txn;
 
 	u_int					ncursors;
 

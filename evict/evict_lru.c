@@ -420,7 +420,7 @@ static int __evict_pass(WT_SESSION_IMPL* session)
 			WT_RET(__wt_cond_signal(session, cache->evict_waiter_cond));
 		}
 
-		/*获得evict flags*/
+		/*获得evict flags,检查是否需要evict page出内存*/
 		WT_RET(__evict_has_work(session, &flags));
 		if (flags == 0)
 			break;

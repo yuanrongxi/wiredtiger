@@ -53,6 +53,7 @@ int __wt_evict(WT_SESSION_IMPL* session, WT_REF* ref, int exclusive)
 	* example, we find a page with active children), we're done.  We have
 	* to make this check for clean pages, too: while unlikely eviction
 	* would choose an internal page with children, it's not disallowed.
+	* 判断是否允许进行evict
 	*/
 	WT_RET(__evict_review(session, ref, exclusive, &inmem_split));
 
