@@ -196,7 +196,7 @@ static inline int __wt_txn_idle_cache_check(WT_SESSION_IMPL* session)
 
 	return 0;
 }
-
+/*检查cache内存是否满了，如果满了，evict lru page,并为txn产生一个全局唯一的ID*/
 static inline int __wt_txn_id_check(WT_SESSION_IMPL* session)
 {
 	WT_CONNECTION_IMPL *conn;
