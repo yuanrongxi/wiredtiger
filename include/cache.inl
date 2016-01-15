@@ -102,6 +102,48 @@ static inline int __wt_session_can_wait(WT_SESSION_IMPL* session)
 	return 1;
 }
 
+/*
+* __wt_cache_full_check --
+*	Wait for there to be space in the cache before a read or update.
+*/
+static inline int __wt_cache_full_check(WT_SESSION_IMPL *session)
+{
+	WT_BTREE *btree;
+	int full;
+
+	/*
+	* LSM sets the no-cache-check flag when holding the LSM tree lock, in
+	* that case, or when holding the schema or handle list locks (which
+	* block eviction), we don't want to highjack the thread for eviction.
+	*/
+	if (F_ISSET(session, WT_SESSION_NO_CACHE_CHECK | WT_SESSION_SCHEMA_LOCKED | WT_SESSION_HANDLE_LIST_LOCKED))
+		return 0;
+
+	/*
+	* Threads operating on trees that cannot be evicted are ignored,
+	* mostly because they're not contributing to the problem.
+	*/
+	if ((btree = S2BT_SAFE(session)) != NULL && F_ISSET(btree, WT_BTREE_NO_EVICTION))
+		return 0;
+
+	/*
+	* Only wake the eviction server the first time through here (if the
+	* cache is too full).
+	*
+	* If the cache is less than 95% full, no work to be done.  If we are
+	* at the API boundary and the cache is more than 95% full, try to
+	* evict at least one page before we start an operation.  This helps
+	* with some eviction-dominated workloads.
+	*/
+	WT_RET(__wt_eviction_check(session, &full, 1));
+	if (full < 95)
+		return 0;
+
+	/*超过95%的内存占用，直接同步驱逐，因为内存吃紧*/
+	return (__wt_cache_wait(session, full));
+}
+
+
 
 
 

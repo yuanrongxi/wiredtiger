@@ -206,6 +206,7 @@
     <ClCompile Include="support\stat.c" />
     <ClCompile Include="test\base_test.c" />
     <ClCompile Include="test\pack_test.c" />
+    <ClCompile Include="txn\txn_log.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\async.h" />

@@ -61,6 +61,9 @@
     <Filter Include="c\evict">
       <UniqueIdentifier>{1a01a692-2bdf-4728-8a14-6c137c68dffe}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\txn">
+      <UniqueIdentifier>{b2ab08a6-edac-46d1-8564-183ccbecc3d4}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -461,6 +464,9 @@
     </ClCompile>
     <ClCompile Include="evict\evict_page.c">
       <Filter>c\evict</Filter>
+    </ClCompile>
+    <ClCompile Include="txn\txn_log.c">
+      <Filter>c\txn</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
