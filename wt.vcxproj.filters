@@ -468,6 +468,12 @@
     <ClCompile Include="txn\txn_log.c">
       <Filter>c\txn</Filter>
     </ClCompile>
+    <ClCompile Include="txn\txn_ext.c">
+      <Filter>c\txn</Filter>
+    </ClCompile>
+    <ClCompile Include="txn\txn.c">
+      <Filter>c\txn</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
