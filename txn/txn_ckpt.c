@@ -291,7 +291,7 @@ int  __wt_txn_checkpoint(WT_SESSION_IMPL* session, const char* cfg[])
 	if (F_ISSET(conn, WT_CONN_CKPT_SYNC))
 		WT_ERR(__checkpoint_apply(session, cfg, __wt_checkpoint_sync));
 
-	/* Acquire the schema lock. */
+	/* Acquire the schema lock. 一个长时间的spin lock*/
 	F_SET(session, WT_SESSION_SCHEMA_LOCKED);
 	__wt_spin_lock(session, &conn->schema_lock);
 
@@ -348,7 +348,7 @@ int  __wt_txn_checkpoint(WT_SESSION_IMPL* session, const char* cfg[])
 
 	WT_ERR(__checkpoint_verbose_track(session, "sync completed", &verb_timer));
 
-	/*sync file*/
+	/*sync meta file*/
 	session->isolation = txn->isolation = TXN_ISO_READ_UNCOMMITTED;
 	saved_meta_next = session->meta_track_next;
 	session->meta_track_next = NULL;
@@ -402,9 +402,9 @@ err:	/*
 
 	/* Tell logging that we have finished a database checkpoint. */
 	if (logging)
-		WT_TRET(__wt_txn_checkpoint_log(session, full,
-		    (ret == 0) ? WT_TXN_LOG_CKPT_STOP : WT_TXN_LOG_CKPT_FAIL, NULL));
+		WT_TRET(__wt_txn_checkpoint_log(session, full, (ret == 0) ? WT_TXN_LOG_CKPT_STOP : WT_TXN_LOG_CKPT_FAIL, NULL));
 
+	/*释放掉所有的checkpoint handles*/
 	for (i = 0; i < session->ckpt_handle_next; ++i) {
 		if (session->ckpt_handle[i].dhandle == NULL) {
 			__wt_free(session, session->ckpt_handle[i].name);
@@ -412,19 +412,65 @@ err:	/*
 		}
 		WT_WITH_DHANDLE(session, session->ckpt_handle[i].dhandle, WT_TRET(__wt_session_release_btree(session)));
 	}
-
 	__wt_free(session, session->ckpt_handle);
 	session->ckpt_handle_allocated = session->ckpt_handle_next = 0;
 
+	/*释放schma spin lock*/
 	if (F_ISSET(session, WT_SESSION_SCHEMA_LOCKED)) {
 		F_CLR(session, WT_SESSION_SCHEMA_LOCKED);
 		__wt_spin_unlock(session, &conn->schema_lock);
 	}
 
+	/*设回checkpoint前的隔离级别*/
 	session->isolation = txn->isolation = saved_isolation;
 
 	return (ret);
 }
 
+/*将所有与name匹配的checkpoint删除*/
+static void __drop_from(WT_CKPT* ckptbase, const char* name, size_t len)
+{
+	WT_CKPT* ckpt;
+	int matched;
 
+	/* name 与"all"匹配，删除所有checkpoint，这里是标记删除*/
+	if(WT_STRING_MATCH("all", name, len)){
+		WT_CKPT_FOREACH(ckptbase, ckpt)
+			F_SET(ckpt, WT_CKPT_DELETE);
+
+		return;
+	}
+
+	/*名字匹配删除*/
+	matched = 0;
+	WT_CKPT_FOREACH(ckptbase, ckpt) {
+		if (!matched && !WT_STRING_MATCH(ckpt->name, name, len))
+			continue;
+
+		matched = 1;
+		F_SET(ckpt, WT_CKPT_DELETE);
+	}
+}
+
+/*删除除name名字以外的所有checkpoints*/
+static void __drop_to(WT_CKPT* ckptbase, const char* name, size_t len)
+{
+	WT_CKPT *ckpt, *mark;
+	
+	mark = NULL;
+	WT_CKPT_FOREACH(ckptbase, ckpt){
+		if (WT_STRING_MATCH(ckpt->name, name, len))
+			mark = ckpt;
+	}
+
+	if(mark = NULL)
+		return ;
+
+	WT_CKPT_FOREACH(ckptbase, ckpt) {
+		F_SET(ckpt, WT_CKPT_DELETE);
+
+		if (ckpt == mark)
+			break;
+	}
+}
 
