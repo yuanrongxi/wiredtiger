@@ -178,7 +178,7 @@ static inline __cursor_row_slot_return(WT_CURSOR_BTREE* cbt, WT_ROW* rip, WT_UPD
 	 *
 	 * First, check for an immediately available key.
 	 */
-	if(__wt_row_leaf_key_info(page, copy, &cell, &kb->data, &kb->size))
+	if(__wt_row_leaf_key_info(page, copy, NULL, &cell, &kb->data, &kb->size))
 		goto value;
 
 	if(btree->huffman_key != NULL)
