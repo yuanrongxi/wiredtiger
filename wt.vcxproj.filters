@@ -581,5 +581,8 @@
     <ClInclude Include="include\txn.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\api.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

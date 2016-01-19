@@ -213,6 +213,7 @@
     <ClCompile Include="txn\txn_recover.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\api.h" />
     <ClInclude Include="include\async.h" />
     <ClInclude Include="include\block.h" />
     <ClInclude Include="include\bloom.h" />
