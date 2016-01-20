@@ -480,6 +480,9 @@
     <ClCompile Include="txn\txn_recover.c">
       <Filter>c\txn</Filter>
     </ClCompile>
+    <ClCompile Include="cursor\cur_bulk.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

@@ -268,6 +268,7 @@ static inline void __wt_txn_read_last(WT_SESSION_IMPL* session)
 /*
 * __wt_txn_cursor_op --
 *	Called for each cursor operation.
+* 为事务创建一个snapshot
 */
 static inline void __wt_txn_cursor_op(WT_SESSION_IMPL* session)
 {

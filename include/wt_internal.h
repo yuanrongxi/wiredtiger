@@ -239,7 +239,7 @@ typedef struct __wt_update WT_UPDATE;
 #include "stat.h"			
 #include "dhandle.h"			
 
-//#include "api.h"
+#include "api.h"
 #include "async.h"
 #include "block.h"
 #include "bloom.h"
