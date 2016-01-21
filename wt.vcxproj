@@ -144,6 +144,7 @@
     <ClCompile Include="conn\conn_log.c" />
     <ClCompile Include="cursor\cur_bulk.c" />
     <ClCompile Include="cursor\cur_config.c" />
+    <ClCompile Include="cursor\cur_ds.c" />
     <ClCompile Include="cursor\cur_json.c" />
     <ClCompile Include="cursor\cur_log.c" />
     <ClCompile Include="cursor\cur_stat.c" />

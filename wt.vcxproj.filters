@@ -483,6 +483,9 @@
     <ClCompile Include="cursor\cur_bulk.c">
       <Filter>c\cursor</Filter>
     </ClCompile>
+    <ClCompile Include="cursor\cur_ds.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

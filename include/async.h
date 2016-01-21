@@ -1,5 +1,5 @@
 /*************************************************************************
-*“Ï≤ΩÀ¢≈Ãøÿ÷∆
+*“Ï≤ΩIOÀ¢≈Ãøÿ÷∆
 *************************************************************************/
 
 typedef enum {
@@ -14,7 +14,7 @@ typedef enum{
 	WT_ASYNC_FLUSH_COMPLETE,	/* Notify flush caller it's done */
 	WT_ASYNC_FLUSH_IN_PROGRESS,	/* Prevent other callers */
 	WT_ASYNC_FLUSHING			/* Notify workers */
-};
+}WT_ASYNC_FLUSH_STATE;
 
 #define	MAX_ASYNC_SLEEP_USECS	100000	/* Maximum sleep waiting for work */
 #define	MAX_ASYNC_YIELD			200		/* Maximum number of yields for work */
