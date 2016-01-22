@@ -1,5 +1,5 @@
 /*************************************************************************
-*异步IO刷盘控制
+*外部异步IO(FILE FLUSH) API实现
 *************************************************************************/
 
 typedef enum {
@@ -69,10 +69,13 @@ struct __wt_async
 
 	int					cur_queue;
 	int					max_queue;
+	
 	WT_ASYNC_FLUSH_STATE flush_state;
 	WT_CONDVAR*			flush_cond;
-	WT_ASYNC_OP_IMPL	flush_count;
+	WT_ASYNC_OP_IMPL	flush_op;
+	uint32_t			flush_count;
 	uint64_t			flush_gen;
+
 	WT_SESSION_IMPL*	worker_sessions[WT_ASYNC_MAX_WORKERS];
 	wt_thread_t			worker_tids[WT_ASYNC_MAX_WORKERS];
 

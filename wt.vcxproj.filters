@@ -64,6 +64,9 @@
     <Filter Include="c\txn">
       <UniqueIdentifier>{b2ab08a6-edac-46d1-8564-183ccbecc3d4}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\async">
+      <UniqueIdentifier>{0ed2795f-e09e-42a1-b37c-dc06d6d4ff11}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -485,6 +488,15 @@
     </ClCompile>
     <ClCompile Include="cursor\cur_ds.c">
       <Filter>c\cursor</Filter>
+    </ClCompile>
+    <ClCompile Include="async\async_op.c">
+      <Filter>c\async</Filter>
+    </ClCompile>
+    <ClCompile Include="async\async_workder.c">
+      <Filter>c\async</Filter>
+    </ClCompile>
+    <ClCompile Include="async\async_api.c">
+      <Filter>c\async</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

@@ -91,6 +91,9 @@
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="async\async_api.c" />
+    <ClCompile Include="async\async_op.c" />
+    <ClCompile Include="async\async_workder.c" />
     <ClCompile Include="block\block_addr.c" />
     <ClCompile Include="block\block_ckpt.c" />
     <ClCompile Include="block\block_compact.c" />
