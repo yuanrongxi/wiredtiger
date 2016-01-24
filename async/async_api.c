@@ -395,3 +395,124 @@ int __wt_async_destroy(WT_SESSION_IMPL* session)
 	return ret;
 }
 
+/*async flush函数实现*/
+int __wt_async_flush(WT_SESSION_IMPL* session)
+{
+	WT_ASYNC *async;
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+
+	conn = S2C(session);
+	if(!conn->async_cfg)
+		return 0;
+
+	async = conn->async;
+	WT_STAT_FAST_CONN_INCR(session, async_flush);
+
+	/*
+	 * We have to do several things.  First we have to prevent
+	 * other callers from racing with us so that only one
+	 * flush is happening at a time.  Next we have to wait for
+	 * the worker threads to notice the flush and indicate
+	 * that the flush is complete on their side.  Then we
+	 * clear the flush flags and return.
+	 */
+retry:
+	while(async->flush_state != WT_ASYNC_FLUSH_NONE) /*async还没有完成flush动作，继续等待*/
+		__wt_sleep(0, 100000);
+
+	/*async state设置成WT_ASYNC_FLUSH_IN_PROGRESS，用cas操作*/
+	if(!WT_ATOMIC_CAS2(async->flush_state, WT_ASYNC_FLUSH_NONE, WT_ASYNC_FLUSH_IN_PROGRESS))
+		goto retry;
+
+	/*
+	 * We're the owner of this flush operation.  Set the
+	 * WT_ASYNC_FLUSH_IN_PROGRESS to block other callers.
+	 * We're also preventing all worker threads from taking
+	 * things off the work queue with the lock.
+	 */
+	async->flush_count = 0;
+	(void)WT_ATOMIC_ADD8(async->flush_gen, 1);
+
+	WT_ASSERT(session, async->flush_op.state == WT_ASYNCOP_FREE);
+	async->flush_op.state = WT_ASYNCOP_READY;
+	/*flush op操作排队*/
+	WT_ERR(__wt_async_op_enqueue(session, &async->flush_op));
+	/*等待flush操作的完成*/
+	while(async->flush_state != WT_ASYNC_FLUSH_COMPLETE)
+		WT_ERR(__wt_cond_wait(NULL, async->flush_cond, 100000));
+
+	/*恢复async state到初始状态*/
+	async->flush_op.state = WT_ASYNCOP_FREE;
+	WT_PUBLISH(async->flush_state, WT_ASYNC_FLUSH_NONE);
+
+err:
+	return ret;
+}
+
+/*
+ * __async_runtime_config --
+ *	Configure runtime fields at allocation.
+ */
+static int __async_runtime_config(WT_ASYNC_OP_IMPL* op, const char* cfg[])
+{
+	WT_ASYNC_OP *asyncop;
+	WT_CONFIG_ITEM cval;
+	WT_SESSION_IMPL *session;
+
+	session = O2S(op);
+	asyncop = (WT_ASYNC_OP *)op;
+
+	/*append项读取*/
+	WT_RET(__wt_config_gets_def(session, cfg, "append", 0, &cval));
+	if(cval.val)
+		F_SET(&asyncop->c, WT_CURSTD_APPEND);
+	else
+		F_CLR(&asyncop->c, WT_CURSTD_APPEND);
+
+	/*overwrite项读取*/
+	WT_RET(__wt_config_gets_def(session, cfg, "overwrite", 1, &cval));
+	if (cval.val)
+		F_SET(&asyncop->c, WT_CURSTD_OVERWRITE);
+	else
+		F_CLR(&asyncop->c, WT_CURSTD_OVERWRITE);
+
+	/*raw项读取*/
+	WT_RET(__wt_config_gets_def(session, cfg, "raw", 0, &cval));
+	if(cval.val)
+		F_SET(&asyncop->c, WT_CURSTD_RAW);
+	else
+		F_CLR(&asyncop->c, WT_CURSTD_RAW);
+
+	return 0;
+}
+
+/*新建一个async op操作并返回WT_ASYNC_OP_IMPL*/
+int __wt_async_new_op(WT_SESSION_IMPL* session, const char* uri, const char* config, const char* cfg[], 
+					WT_ASYNC_CALLBACK* cb, WT_ASYNC_OP_IMPL** opp)
+{
+	WT_ASYNC_OP_IMPL *op;
+	WT_CONNECTION_IMPL *conn;
+	WT_DECL_RET;
+
+	*opp = NULL;
+
+	conn = S2C(session);
+	if (!conn->async_cfg)
+		return (ENOTSUP);
+
+	op = NULL;
+	WT_ERR(__async_new_op_alloc(session, uri, config, &op)); /*WT_ASYNC OP对象池分配*/
+	WT_ERR(__async_runtime_config(op, cfg));
+	op->cb = cb;
+	*opp = op;
+
+	return 0;
+
+err:
+	if(op != NULL)
+		op->state = WT_ASYNCOP_FREE;
+
+	return ret;
+}
+
