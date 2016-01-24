@@ -67,6 +67,7 @@ retry:
 	return 0;
 }
 
+/*workerÏß³ÌµÈ´ý*/
 static int __async_flush_wait(WT_SESSION_IMPL* session, WT_ASYNC* async, uint64_t my_gen)
 {
 	WT_DECL_RET;
