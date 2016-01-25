@@ -282,7 +282,7 @@ int __wt_async_reconfig(WT_SESSION_IMPL* session, const char* cfg[])
 	}
 	else if (conn->async_cfg == 0 && run)
 		__async_start(session);
-	else if (conn->async_cfg == 0) /*不是快关控制信号*/
+	else if (conn->async_cfg == 0) /*不是开关控制信号*/
 		return 0;
 
 	/*

@@ -248,7 +248,8 @@ WT_THREAD_RET __wt_async_worker(void* arg)
 	}
 
 	if(0){
-err: WT_PANIC_MSG(session, ret, "async worker error");
+err: 
+		WT_PANIC_MSG(session, ret, "async worker error");
 	}
 
 	ac = STAILQ_FIRST(&worker.cursorqh);

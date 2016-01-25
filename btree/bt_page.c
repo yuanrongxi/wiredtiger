@@ -82,6 +82,7 @@ int __wt_page_in_func(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
 				break;
 			}
 
+			/*走到这一步，说明page无法获得一个hazard pointer，那么应该考虑evict它*/
 			page = ref->page;
 			WT_ASSERT(session, page != NULL);
 
