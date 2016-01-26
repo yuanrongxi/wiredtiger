@@ -67,6 +67,9 @@
     <Filter Include="c\async">
       <UniqueIdentifier>{0ed2795f-e09e-42a1-b37c-dc06d6d4ff11}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\reconcile">
+      <UniqueIdentifier>{5ee75b76-cfab-438b-b921-44d5ffe5548b}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -497,6 +500,9 @@
     </ClCompile>
     <ClCompile Include="async\async_api.c">
       <Filter>c\async</Filter>
+    </ClCompile>
+    <ClCompile Include="reconcile\rec_track.c">
+      <Filter>c\reconcile</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
