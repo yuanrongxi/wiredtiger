@@ -258,10 +258,10 @@ static inline int __wt_page_parent_modify_set(WT_SESSION_IMPL* session, WT_REF* 
 	return 0;
 }
 
-/*判断p的位置是否在page的磁盘部分数据上*/
+/*判断p的位置是否在page的内存连续空间数据上*/
 static inline int __wt_off_page(WT_PAGE* page, const void* p)
 {
-	return (page->dsk == NULL || p < (void *)page->dsk ||p >= (void *)((uint8_t *)page->dsk + page->dsk->mem_size));
+	return (page->dsk == NULL || p < (void *)page->dsk || p >= (void *)((uint8_t *)page->dsk + page->dsk->mem_size));
 }
 
 /*对btree上key/value值计算*/

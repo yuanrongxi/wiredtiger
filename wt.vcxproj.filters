@@ -504,6 +504,9 @@
     <ClCompile Include="reconcile\rec_track.c">
       <Filter>c\reconcile</Filter>
     </ClCompile>
+    <ClCompile Include="reconcile\rec_write.c">
+      <Filter>c\reconcile</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

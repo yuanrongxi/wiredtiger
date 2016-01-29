@@ -80,7 +80,7 @@ struct __wt_session_impl
 	u_int					ckpt_handle_next;
 	size_t					ckpt_handle_allocated;
 
-	void*					reconcile;
+	void*					reconcile;						/*session对应的reconcile对象句柄*/
 	int	(*reconcile_cleanup)(WT_SESSION_IMPL *);
 
 	int						compaction;

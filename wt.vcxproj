@@ -198,6 +198,7 @@
     <ClCompile Include="posix\os_time.c" />
     <ClCompile Include="posix\os_yield.c" />
     <ClCompile Include="reconcile\rec_track.c" />
+    <ClCompile Include="reconcile\rec_write.c" />
     <ClCompile Include="support\cksum.c" />
     <ClCompile Include="support\err.c" />
     <ClCompile Include="support\filename.c" />
