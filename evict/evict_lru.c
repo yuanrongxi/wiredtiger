@@ -765,7 +765,7 @@ retry:
 				if (spins < 1000)
 					__wt_yield();
 				else
-					__wt_sleep(0, 1000);
+					__wt_sleep(0, 1000)
 			}
 			if (ret != 0)
 				break;
