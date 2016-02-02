@@ -1698,6 +1698,117 @@ split_grow:
 	return 0;
 }
 
+/*进行压缩数据的解压*/
+static int __rec_raw_decompress(WT_SESSION_IMPL* session, const void* image, size_t size, void* retp)
+{
+	WT_BTREE *btree;
+	WT_DECL_ITEM(tmp);
+	WT_DECL_RET;
+	WT_PAGE_HEADER const *dsk;
+	size_t result_len;
+
+	btree = S2BT(session);
+	dsk = image;
+
+	/*进行数据解压缩*/
+	WT_RET(__wt_alloc(session, dsk->mem_size, &tmp));
+	memcpy(tmp->mem, image, WT_BLOCK_COMPRESS_SKIP);
+	WT_ERR(btree->compressor->decompress(btree->compressor, 
+		&session->iface, 
+		(uint8_t*)image + WT_BLOCK_COMPRESS_SKIP, size - WT_BLOCK_COMPRESS_SKIP,
+		(uint8_t *)tmp->mem + WT_BLOCK_COMPRESS_SKIP, dsk->mem_size - WT_BLOCK_COMPRESS_SKIP, 
+		&result_len));
+
+	/*解压缩后长度的判断，如果长度不匹配，说明是解压缩失败*/
+	if (result_len != dsk->mem_size - WT_BLOCK_COMPRESS_SKIP)
+		WT_ERR(__wt_illegal_value(session, btree->dhandle->name));
+	
+	WT_ERR(__wt_strdup(session, tmp->data, dsk->mem_size, retp));
+
+	/*block错误检查*/
+	WT_ASSERT(session, __wt_verify_dsk_image(session, "[raw evict split]", tmp->data, dsk->mem_size, 0) == 0);
+err:
+	__wt_src_free(session, &tmp);
+	return ret;
+}
+
+/* raw compression split routine */
+static inline int __rec_split_raw(WT_SESSION_IMPL* session, WT_RECONCILE* r, size_t next_len)
+{
+	return __rec_split_raw_worker(session, r, next_len, 0);
+}
+
+/*
+*	Finish processing a page, standard version.
+*/
+static int __rec_split_finish_std(WT_SESSION_IMPL* session, WT_RECONCILE* r)
+{
+	WT_BOUNDARY *bnd;
+	WT_PAGE_HEADER *dsk;
+
+	switch (r->bnd_state){
+	case SPLIT_BOUNDARY:
+	case SPLIT_MAX:
+		/*
+		* We never split, the reconciled page fit into a maximum page
+		* size.  Change the first boundary slot to represent the full
+		* page (the first boundary slot is largely correct, just update
+		* the number of entries).
+		*/
+		r->bnd_next = 0;
+		break;
+
+	case SPLIT_TRACKING_OFF:
+		/*
+		* If we have already split, or aren't tracking boundaries, put
+		* the remaining data in the next boundary slot.
+		*/
+		WT_RET(__rec_split_bnd_grow(session, r));
+		break;
+
+	case SPLIT_TRACKING_RAW:
+		/*We were configured for raw compression, but never actually wrote anything.*/
+		break;
+
+	WT_ILLEGAL_VALUE(session);
+	}
+
+	/*
+	* We only arrive here with no entries to write if the page was entirely
+	* empty, and if the page is empty, we merge it into its parent during
+	* the parent's reconciliation.  A page with skipped updates isn't truly
+	* empty, continue on.
+	*/
+	if (r->entries == 0 && r->skip_next == 0)
+		return 0;
+
+	/*设置新的boundary数据*/
+	bnd = &r->bnd[r->bnd_next++];
+	bnd->entries = r->entries;
+
+	dsk = r->dsk.mem;
+	dsk->recno = bnd->recno;
+	dsk->u.entries = r->entries;
+	dsk->mem_size = r->dsk.size = WT_PTRDIFF32(r->first_free, dsk);
+
+	/* If this is a checkpoint, we're done, otherwise write the page. */
+	return __rec_is_checkpoint(r, bnd) ? 0 : __rec_split_write(session, r, bnd, &r->dsk, 1);
+}
+
+/*结束page的reconcile操作*/
+static int __rec_split_finish(WT_SESSION_IMPL* session, WT_RECONCILE* r)
+{
+	if (r->raw_compression && r->entries != 0) {
+		while (r->entries != 0) /*进行compress split*/
+			WT_RET(__rec_split_raw_worker(session, r, 0, 1));
+	}
+	else /*直接将page写入盘里面*/
+		WT_RET(__rec_split_finish_std(session, r));
+
+	return 0;
+}
+
+
 
 
 
