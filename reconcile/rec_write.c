@@ -1420,3 +1420,284 @@ static int __rec_split(WT_SESSION_IMPL* session, WT_RECONCILE* r, size_t next_le
 	return 0;
 }
 
+/*  */
+static int __rec_split_raw_worker(WT_SESSION_IMPL* session, WT_RECONCILE* r, size_t next_len, int no_more_rows)
+{
+	WT_BM *bm;
+	WT_BOUNDARY *last, *next;
+	WT_BTREE *btree;
+	WT_CELL *cell;
+	WT_CELL_UNPACK *unpack, _unpack;
+	WT_COMPRESSOR *compressor;
+	WT_DECL_RET;
+	WT_ITEM *dst, *write_ref;
+	WT_PAGE_HEADER *dsk, *dsk_dst;
+	WT_SESSION *wt_session;
+	size_t corrected_page_size, len, result_len;
+	uint64_t recno;
+	uint32_t entry, i, result_slots, slots;
+	int last_block;
+	uint8_t *dsk_start;
+
+	wt_session = (WT_SESSION *)session;
+	btree = S2BT(session);
+	bm = btree->bm;
+
+	unpack = &_unpack;
+	compressor = btree->compressor;
+	dst = &r->raw_destination;
+	dsk = r->dsk.mem;
+
+	/*尝试扩大boundary素组，因为要占用一个新的boundary单元*/
+	WT_RET(__rec_split_bnd_grow(session, r));
+	last = &r->bnd[r->bnd_next];
+	next = last + 1;
+
+	/*第一个kv对还没有确定，。。。。*/
+	if (r->entries == 0)
+		goto split_grow;
+
+	/*
+	* Build arrays of offsets and cumulative counts of cells and rows in
+	* the page: the offset is the byte offset to the possible split-point
+	* (adjusted for an initial chunk that cannot be compressed), entries
+	* is the cumulative page entries covered by the byte offset, recnos is
+	* the cumulative rows covered by the byte offset.
+	*/
+	if (r->entries >= r->raw_max_slots){
+		/*为什么是重新释放，再alloc??*/
+		__wt_free(session, r->raw_entries);
+		__wt_free(session, r->raw_offsets);
+		__wt_free(session, r->raw_recnos);
+		r->raw_max_slots = 0;
+
+		/*扩大100个raw entires数组单元*/
+		i = r->entries + 100;
+		WT_RET(__wt_calloc_def(session, i, &r->raw_entries));
+		WT_RET(__wt_calloc_def(session, i, &r->raw_offsets));
+
+		if (dsk->type == WT_PAGE_COL_INT || dsk->type == WT_PAGE_COL_VAR)
+			WT_RET(__wt_calloc_def(session, i, &r->raw_recnos));
+		r->raw_max_slots = i;
+	}
+	/*更新disk page header中的entries值*/
+	dsk->u.entries = r->entries;
+
+	/*We track the record number at each column-store split point, set an initial value.*/
+	recno = 0;
+	if (dsk->type == WT_PAGE_COL_VAR)
+		recno = last->recno;
+
+	/*遍历所有的btree disk buffer中所有的cell，进行split操作*/
+	entry = slots = 0;
+	WT_CELL_FOREACH(btree, dsk, cell, unpack, i){
+		++entry;
+
+		/*对cell进行unpack*/
+		__wt_cell_unpack(cell, unpack);
+		switch (unpack->type){
+		case WT_CELL_KEY:
+		case WT_CELL_KEY_OVFL:
+		case WT_CELL_KEY_SHORT:
+			break;
+		case WT_CELL_ADDR_DEL:
+		case WT_CELL_ADDR_INT:
+		case WT_CELL_ADDR_LEAF:
+		case WT_CELL_ADDR_LEAF_NO:
+		case WT_CELL_DEL:
+		case WT_CELL_VALUE:
+		case WT_CELL_VALUE_OVFL:
+		case WT_CELL_VALUE_SHORT:
+			if (dsk->type == WT_PAGE_COL_INT) {
+				recno = unpack->v;
+				break;
+			}
+			if (dsk->type == WT_PAGE_COL_VAR) {
+				recno += __wt_cell_rle(unpack);
+				break;
+			}
+			r->raw_entries[slots] = entry;
+			continue;
+			WT_ILLEGAL_VALUE(session);
+		}
+
+		/*dsk->type == WT_PAGE_COL_INT | WT_PAGE_COL_VAR */
+		if ((len = WT_PTRDIFF(cell, dsk)) > btree->allocsize)
+			r->raw_offsets[++slots] = WT_STORE_SIZE(len - WT_BLOCK_COMPRESS_SKIP);
+
+		if (dsk->type == WT_PAGE_COL_INT || dsk->type == WT_PAGE_COL_VAR)
+			r->raw_recnos[slots] = recno;
+		r->raw_entries[slots] = entry;
+	}
+
+	/*
+	* If we haven't managed to find at least one split point, we're done,
+	* don't bother calling the underlying compression function.
+	*/
+	if (slots == 0){
+		result_len = 0;
+		result_slots = 0;
+		goto no_slots;
+	}
+
+	r->raw_offsets[++slots] = WT_STORE_SIZE(WT_PTRDIFF(cell, dsk) - WT_BLOCK_COMPRESS_SKIP);
+
+	/*compress处理，计算compress后的数据大小，并作为block size*/
+	if (compressor->pre_size == NULL)
+		result_len = (size_t)r->raw_offsets[slots];
+	else
+		WT_RET(compressor->pre_size(compressor, wt_session, (uint8_t *)dsk + WT_BLOCK_COMPRESS_SKIP, (size_t)r->raw_offsets[slots], &result_len));
+	corrected_page_size = result_len + WT_BLOCK_COMPRESS_SKIP;
+	WT_RET(bm->write_size(bm, session, &corrected_page_size));
+	WT_RET(__wt_buf_init(session, dst, corrected_page_size));
+
+	/*数据压缩转移*/
+	memcpy(dst->mem, dsk, WT_BLOCK_COMPRESS_SKIP);
+	ret = compressor->compress_raw(compressor, wt_session,
+		r->page_size_orig, btree->split_pct,
+		WT_BLOCK_COMPRESS_SKIP, (uint8_t *)dsk + WT_BLOCK_COMPRESS_SKIP,
+		r->raw_offsets, slots, (uint8_t *)dst->mem + WT_BLOCK_COMPRESS_SKIP,
+		result_len, no_more_rows, &result_len, &result_slots);
+
+	switch (ret){
+	case EAGAIN:
+		/*
+		* The compression function wants more rows; accumulate and
+		* retry.
+		*
+		* Reset the resulting slots count, just in case the compression
+		* function modified it before giving up.
+		*/
+		result_slots = 0;
+		break;
+
+	case 0:
+		if (result_slots == 0){ /*result_slots = 0，直接用raw data写入block file*/
+			WT_STAT_FAST_DATA_INCR(session, compress_raw_fail);
+			if (no_more_rows)
+				break;
+
+			result_slots = slots - 1;
+			result_len = r->raw_offsets[result_slots];
+			WT_RET(__wt_buf_grow(session, dst, result_len + WT_BLOCK_COMPRESS_SKIP));
+			memcpy((uint8_t *)dst->mem + WT_BLOCK_COMPRESS_SKIP, (uint8_t *)dsk + WT_BLOCK_COMPRESS_SKIP, result_len);
+
+			last->already_compressed = 0;
+		}
+		else{ /*数据压缩一个slot单元成功*/
+			WT_STAT_FAST_DATA_INCR(session, compress_raw_ok);
+
+			if (result_slots == slots && !no_more_rows)
+				result_slots = 0;
+			else
+				last->already_compressed = 1;
+		}
+		break;
+
+	default:
+		return ret;
+	}
+
+no_slots:
+	last_block = no_more_rows && (result_slots == 0 || result_slots == slots);
+	if (result_slots != 0){
+		/*
+		* We have a block, finalize the header information.
+		*/
+		dst->size = result_len + WT_BLOCK_COMPRESS_SKIP;
+		dsk_dst = dst->mem;
+		dsk_dst->recno = last->recno;
+		dsk_dst->mem_size = r->raw_offsets[result_slots] + WT_BLOCK_COMPRESS_SKIP;
+		dsk_dst->u.entries = r->raw_entries[result_slots - 1];
+
+		len = WT_PTRDIFF(r->first_free, (uint8_t *)dsk + dsk_dst->mem_size);
+		dsk_start = WT_PAGE_HEADER_BYTE(btree, dsk);
+		(void)memmove(dsk_start, (uint8_t *)r->first_free - len, len);
+
+		r->entries -= r->raw_entries[result_slots - 1];
+		r->first_free = dsk_start + len;
+		r->space_avail += r->raw_offsets[result_slots];
+		WT_ASSERT(session, r->first_free + r->space_avail <= (uint8_t *)r->dsk.mem + r->dsk.memsize);
+
+		/*设置boundary边界*/
+		switch (dsk->type) {
+		case WT_PAGE_COL_INT:
+			next->recno = r->raw_recnos[result_slots];
+			break;
+		case WT_PAGE_COL_VAR:
+			next->recno = r->raw_recnos[result_slots - 1];
+			break;
+		case WT_PAGE_ROW_INT:
+		case WT_PAGE_ROW_LEAF:
+			next->recno = 0;
+			if (!last_block) {
+				/*
+				* Confirm there was uncompressed data remaining
+				* in the buffer, we're about to read it for the
+				* next chunk's initial key.
+				*/
+				WT_ASSERT(session, len > 0);
+				WT_RET(__rec_split_row_promote_cell(session, dsk, &next->key)); /*设置next->key*/
+			}
+			break;
+		}
+		write_ref = dst;
+	}
+	else if(no_more_rows){
+		/*
+		* Compression failed and there are no more rows to accumulate,
+		* write the original buffer instead.
+		*/
+		WT_STAT_FAST_DATA_INCR(session, compress_raw_fail);
+
+		dsk->recno = last->recno;
+		dsk->mem_size = r->dsk.size = WT_PTRDIFF32(r->first_free, dsk);
+		dsk->u.entries = r->entries;
+
+		r->entries = 0;
+		r->first_free = WT_PAGE_HEADER_BYTE(btree, dsk);
+		r->space_avail = r->page_size - WT_PAGE_HEADER_BYTE_SIZE(btree);
+
+		write_ref = &r->dsk;
+		last->already_compressed = 0;
+	}
+	else{
+		/*
+		* Compression failed, there are more rows to accumulate and the
+		* compression function wants to try again; increase the size of
+		* the "page" and try again after we accumulate some more rows.
+		*/
+		WT_STAT_FAST_DATA_INCR(session, compress_raw_fail_temporary);
+		goto split_grow;
+	}
+
+	++r->bnd_next;
+
+	/*
+	* If we are writing the whole page in our first/only attempt, it might
+	* be a checkpoint (checkpoints are only a single page, by definition).
+	* Further, checkpoints aren't written here, the wrapup functions do the
+	* write, and they do the write from the original buffer location.  If
+	* it's a checkpoint and the block isn't in the right buffer, copy it.
+	*
+	* If it's not a checkpoint, write the block.
+	*/
+	if (r->bnd_next == 1 && last_block && __rec_is_checkpoint(r, last)){
+		if (write_ref == dst)
+			WT_RET(__wt_buf_set(session, &r->dsk, dst->mem, dst->size));
+	}
+	else
+		WT_RET(__rec_split_write(session, r, last, write_ref, last_block));
+
+	if (r->space_avail < next_len){
+split_grow:
+		r->page_size *= 2;
+		return (__rec_split_grow(session, r, r->page_size + next_len));
+	}
+
+	return 0;
+}
+
+
+
+
