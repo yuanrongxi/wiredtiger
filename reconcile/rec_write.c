@@ -1808,6 +1808,197 @@ static int __rec_split_finish(WT_SESSION_IMPL* session, WT_RECONCILE* r)
 	return 0;
 }
 
+/*将已经split的boundary数据写入block中*/
+static int __rec_split_fixup(WT_SESSION_IMPL* session, WT_RECONCILE* r)
+{
+	WT_BOUNDARY *bnd;
+	WT_BTREE *btree;
+	WT_DECL_ITEM(tmp);
+	WT_DECL_RET;
+	WT_PAGE_HEADER *dsk;
+	size_t i, len;
+	uint8_t *dsk_start, *p;
+
+	btree = S2BT(session);
+
+	/*分配一个临时的缓冲区，并把dsk.mem的页头信息拷贝到缓冲区开始的位置*/
+	WT_RET(__wt_scr_alloc(session, r->dsk.memsize, &tmp));
+	dsk = tmp->mem;
+	memcpy(dsk, r->dsk.mem, WT_PAGE_HEADER_SIZE);
+
+	/*计算数据开始存储的位置*/
+	dsk_start = WT_PAGE_HEADER_BYTE(btree, dsk);
+	for (i = 0, bnd = r->bnd; i < r->bnd_next; ++i, ++bnd){
+		/*拷贝boundary区间数据*/
+		len = (bnd + 1)->offset - bnd->offset;
+		memcpy(dsk_start, (uint8_t *)r->dsk.mem + bnd->offset, len);
+
+		dsk->recno = bnd->recno;
+		dsk->u.entries = bnd->entries;
+		dsk->mem_size = tmp->size = WT_PAGE_HEADER_BYTE_SIZE(btree) + len;
+		/*将boundary的数据写入block中*/
+		WT_ERR(__rec_split_write(session, r, bnd, tmp, 0));
+	}
+
+	p = (uint8_t *)r->dsk.mem + bnd->offset;
+	len = WT_PTRDIFF(r->first_free, p); /*计算最后一个剩余boundary的长度*/
+	if (len >= r->split_size - WT_PAGE_HEADER_BYTE_SIZE(btree))
+		WT_PANIC_ERR(session, EINVAL, "Reconciliation remnant too large for the split buffer");
+
+	/*将写入的数据从r中移除掉*/
+	dsk = r->dsk.mem;
+	dsk_start = WT_PAGE_HEADER_BYTE(btree, dsk);
+	(void)memmove(dsk_start, p, len);
+	/*调整r中的状态信息*/
+	r->entries -= r->total_entries;
+	r->first_free = dsk_start + len;
+	WT_ASSERT(session, r->page_size >= (WT_PAGE_HEADER_BYTE_SIZE(btree) + len));
+	r->space_avail = r->split_size - (WT_PAGE_HEADER_BYTE_SIZE(btree) + len);
+
+err:
+	__wt_scr_free(session, &tmp);
+	return ret;
+}
+
+/*
+*	Write a disk block out for the split helper functions.
+*/
+static int __rec_split_write(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_BOUNDARY* bnd, WT_ITEM* buf, int last_block)
+{
+	WT_BTREE *btree;
+	WT_DECL_ITEM(key);
+	WT_DECL_RET;
+	WT_MULTI *multi;
+	WT_PAGE *page;
+	WT_PAGE_HEADER *dsk;
+	WT_PAGE_MODIFY *mod;
+	WT_UPD_SKIPPED *skip;
+	size_t addr_size;
+	uint32_t bnd_slot, i, j;
+	int cmp;
+	uint8_t addr[WT_BTREE_MAX_ADDR_COOKIE];
+
+	btree = S2BT(session);
+	dsk = buf->mem;
+	page = r->page;
+	mod = page->modify;
+
+	WT_RET(__wt_scr_alloc(session, 0, &key));
+
+	/* Set the zero-length value flag in the page header. */
+	if (dsk->type == WT_PAGE_ROW_LEAF){
+		F_CLR(dsk, WT_PAGE_EMPTY_V_ALL | WT_PAGE_EMPTY_V_NONE);
+
+		if (r->entries != 0 && r->all_empty_value)
+			F_SET(dsk, WT_PAGE_EMPTY_V_ALL);
+		if (r->entries != 0 && !r->any_empty_value)
+			F_SET(dsk, WT_PAGE_EMPTY_V_NONE);
+	}
+
+	switch (dsk->type){
+	case WT_PAGE_COL_FIX:
+		bnd->addr.type = WT_ADDR_LEAF_NO;
+		break;
+	case WT_PAGE_COL_VAR:
+	case WT_PAGE_ROW_LEAF:
+		bnd->addr.type = r->ovfl_items ? WT_ADDR_LEAF : WT_ADDR_LEAF_NO;
+		break;
+	case WT_PAGE_COL_INT:
+	case WT_PAGE_ROW_INT:
+		bnd->addr.type = WT_ADDR_INT;
+		break;
+		WT_ILLEGAL_VALUE_ERR(session);
+	}
+
+	bnd->size = (uint32_t)buf->size;
+	bnd->cksum = 0;
+
+	/*将update skip list中的update插入到对应的boundary中*/
+	for (i = 0, skip = r->skip; i < r->skip_next; i++, ++skip){
+		/*最后一个block，将剩余的update全部存入boundary中*/
+		if (last_block){
+			WT_ERR(__rec_skip_update_move(session, bnd, skip));
+			continue;
+		}
+
+		switch (page->type){
+		case WT_PAGE_COL_FIX:
+		case WT_PAGE_COL_VAR:
+			if (WT_INSERT_RECNO(skip->ins) >= (bnd + 1)->recno)/*skip update list中剩余的update超出了这个boundary的管辖范围*/
+				goto skip_check_complete;
+			break;
+
+		case WT_PAGE_ROW_LEAF:
+			if (skip->ins == NULL)
+				WT_ERR(__wt_row_leaf_key(session, page, skip->rip, key, 0));
+			else {
+				key->data = WT_INSERT_KEY(skip->ins);
+				key->size = WT_INSERT_KEY_SIZE(skip->ins);
+			}
+			WT_ERR(__wt_compare(session, btree->collator, key, &(bnd + 1)->key, &cmp)); /*skip update list中剩余的update超出了这个boundary的管辖范围*/
+			if (cmp >= 0)
+				goto skip_check_complete;
+			break;
+
+		WT_ILLEGAL_VALUE_ERR(session);
+		}
+
+		WT_ERR(__rec_skip_update_move(session, bnd, skip));
+	}
+
+skip_check_complete:
+	/*把移到boundary的update从skip array中移除*/
+	for (j = 0; i < r->skip_next; ++j, ++i)
+		r->skip[j] = r->skip[i];
+	r->skip_next = j;
+
+	if (bnd->skip != NULL){
+		if (bnd->already_compressed)
+			WT_ERR(__rec_raw_decompress(session, buf->data, buf->size, &bnd->dsk));
+		else {
+			WT_ERR(__wt_strndup(session, buf->data, buf->size, &bnd->dsk));
+			WT_ASSERT(session, __wt_verify_dsk_image(session, "[evict split]", buf->data, buf->size, 1) == 0);
+		}
+		goto done;
+	}
+
+	/*
+	* If we wrote this block before, re-use it.  Pages get written in the
+	* same block order every time, only check the appropriate slot.  The
+	* expensive part of this test is the checksum, only do that work when
+	* there has been or will be a reconciliation of this page involving
+	* split pages.  This test isn't perfect: we're doing a checksum if a
+	* previous reconciliation of the page split or if we will split this
+	* time, but that test won't calculate a checksum on the first block
+	* the first time the page splits.
+	*/
+	bnd_slot = (uint32_t)(bnd - r->bnd);
+	if (bnd_slot > 1 || (F_ISSET(mod, WT_PM_REC_MULTIBLOCK) && mod->mod_multi != NULL)){
+		dsk->write_gen = 0;
+		memset(WT_BLOCK_HEADER_REF(dsk), 0, btree->block_header);
+		bnd->cksum = __wt_cksum(buf->data, buf->size);
+
+		if (F_ISSET(mod, WT_PM_REC_MULTIBLOCK) && mod->mod_multi_entries > bnd_slot) {
+			multi = &mod->mod_multi[bnd_slot];
+			if (multi->size == bnd->size && multi->cksum == bnd->cksum) {
+				multi->addr.reuse = 1;
+				bnd->addr = multi->addr;
+
+				WT_STAT_FAST_DATA_INCR(session, rec_page_match);
+				goto done;
+			}
+		}
+	}
+
+	WT_ERR(__wt_bt_write(session,buf, addr, &addr_size, 0, bnd->already_compressed));
+	WT_ERR(__wt_strndup(session, addr, addr_size, &bnd->addr.addr));
+	bnd->addr.size = (uint8_t)addr_size;
+
+done:
+err :
+	__wt_scr_free(session, &key);
+	return ret;
+}
 
 
 
