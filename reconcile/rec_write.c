@@ -2447,6 +2447,82 @@ static int __rec_col_fix_slvg(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE
 	return __rec_split_finish(session, r);
 }
 
+/**/
+static int __rec_col_var_helper(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_SALVAGE_COOKIE* salvage, 
+					WT_ITEM* value, int deleted, uint8_t overflow_type, uint64_t rle)
+{
+	WT_BTREE *btree;
+	WT_KV *val;
+
+	btree = S2BT(session);
+
+	val = &r->v;
+
+	/*
+	 * Occasionally, salvage needs to discard records from the beginning or
+	 * end of the page, and because the items may be part of a RLE cell, do
+	 * the adjustments here.   It's not a mistake we don't bother telling
+	 * our caller we've handled all the records from the page we care about,
+	 * and can quit processing the page: salvage is a rare operation and I
+	 * don't want to complicate our caller's loop.
+	 */
+	if(salvage != NULL){
+		if(salvage->done)
+			return 0;
+
+		if(salvage->skip != 0){
+			if (rle <= salvage->skip) {
+				salvage->skip -= rle;
+				return 0;
+			}
+			rle -= salvage->skip;
+			salvage->skip = 0;
+		}
+
+		if(salvage->take != 0){
+			if(rle <= salvage->take)
+				salvage->take -= rle;
+			else{
+				rle = salvage->take;
+				salvage->take = 0;
+			}
+
+			if(salvage->take == 0)
+				salvage->done = 1;
+		}
+	}
+
+	if(deleted){
+		val->cell_len = __wt_cell_pack_del(&val->cell, rle);
+		val->buf.data = NULL;
+		val->buf.size = 0;
+		val->len = val->cell_len;
+	}
+	else if(overflow_type){
+		val->cell_len = __wt_cell_pack_ovfl(&val->cell, overflow_type, rle, value->size);
+		val->buf.data = value->data;
+		val->buf.size = value->size;
+		val->len = val->cell_len + value->size;
+	}
+	else
+		WT_RET(__rec_cell_build_val(session, r, value->data, value->size, rle));
+
+	/* Boundary: split or write the page. */
+	if (val->len > r->space_avail)
+		WT_RET(r->raw_compression ? __rec_split_raw(session, r, val->len) : __rec_split(session, r, val->len));
+
+	/* Copy the value onto the page. */
+	if (!deleted && !overflow_type && btree->dictionary)
+		WT_RET(__rec_dict_replace(session, r, rle, val));
+	__rec_copy_incr(session, r, val);
+
+	/* Update the starting record number in case we split. */
+	r->recno += rle;
+
+	return 0;
+}
+
+
 
 
 
