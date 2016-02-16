@@ -468,6 +468,7 @@ static inline int __rec_raw_compression_config(WT_SESSION_IMPL* session, WT_PAGE
 	return 1;
 }
 
+/*分配一个WT_RECONCILE对象，并进行初始化*/
 static int __rec_write_init(WT_SESSION_IMPL* session, WT_REF* ref, uint32_t flags, WT_SALVAGE_COOKIE* salvage, void* reconcilep)
 {
 	WT_BTREE *btree;
@@ -1002,7 +1003,7 @@ static inline void __rec_key_state_update(WT_RECONCILE* r, int ovfl_key)
 }
 
 /*确定bytes个字节在换算成btree bitcnt对齐的enter长度*/
-#define WT_FIX_BYTES_TO_ENTERS(btree, bytes)			((uint32_t)((((bytes) * 8) / (btree)->bitcnt)))
+#define WT_FIX_BYTES_TO_ENTRIES(btree, bytes)			((uint32_t)((((bytes) * 8) / (btree)->bitcnt)))
 /*entries个对象空间占用多少个字节*/
 #define WT_FIX_ENTRIES_TO_BYTES(btree, entries)			((uint32_t)WT_ALIGN((entries) * (btree)->bitcnt, 8))
 
@@ -1989,7 +1990,7 @@ skip_check_complete:
 			}
 		}
 	}
-
+	/*将数据写入到block中,并获得block addr cookie*/
 	WT_ERR(__wt_bt_write(session,buf, addr, &addr_size, 0, bnd->already_compressed));
 	WT_ERR(__wt_strndup(session, addr, addr_size, &bnd->addr.addr));
 	bnd->addr.size = (uint8_t)addr_size;
@@ -1998,6 +1999,452 @@ done:
 err :
 	__wt_scr_free(session, &key);
 	return ret;
+}
+
+int __wt_bulk_init(WT_SESSION_IMPL* session, WT_CURSOR_BULK* cbulk)
+{
+	WT_BTREE* btree;
+	WT_PAGE_INDEX* pindex;
+	WT_RECONCILE* r;
+	uint64_t recno;
+
+	btree = S2BT(session);
+
+	/*
+	* Bulk-load is only permitted on newly created files, not any empty file -- see the checkpoint code for a discussion.
+	*/
+	if (!btree->bulk_load_ok)
+		WT_RET_MSG(session, EINVAL, "bulk-load is only possible for newly created trees");
+
+	pindex = WT_INTL_INDEX_GET_SAFE(btree->root.page);
+	cbulk->ref = pindex->index[0];
+	cbulk->leaf = cbulk->ref->page;
+
+	/*初始化bulk reconcile对象*/
+	WT_RET(__rec_write_init(session, cbulk->ref, 0, NULL, &cbulk->reconcile));
+	r = cbulk->reconcile;
+	r->is_bulk_load = 1;
+
+	switch (btree->type){
+	case BTREE_COL_FIX:
+	case BTREE_COL_VAR:
+		recno = 1;
+		break;
+
+	case BTREE_ROW:
+		recno = 0;
+		break;
+
+		WT_ILLEGAL_VALUE(session);
+	}
+
+	return __rec_split_init(session, r, cbulk->ref, recno, btree->maxleafpage);
+}
+
+int __wt_bulk_wrapup(WT_SESSION_IMPL* session, WT_CURSOR_BULK* cbulk)
+{
+	WT_BTREE *btree;
+	WT_PAGE *parent;
+	WT_RECONCILE *r;
+
+	r = cbulk->reconcile;
+	btree = S2BT(session);
+
+	switch (btree->type){
+	case BTREE_COL_FIX:
+		if (cbulk->entry != 0)
+			__rec_incr(session, r, cbulk->entry, __bitstr_size((size_t)cbulk->entry * btree->bitcnt));
+		break;
+
+	case BTREE_COL_VAR:
+		if (cbulk->rle != 0)
+			WT_RET(__wt_bulk_insert_var(session, cbulk));
+		break;
+
+	case BTREE_ROW:
+		break;
+
+	WT_ILLEGAL_VALUE(session);
+	}
+
+	WT_RET(__rec_split_finish(session, r));
+	WT_RET(__rec_write_wrapup(session, r, r->page));
+
+	parent = r->ref->home;
+	WT_RET(__wt_page_modify_init(session, parent));
+	__wt_page_modify_set(session, parent);
+
+	__rec_destroy(session, &cbulk->reconcile);
+
+	return 0;
+}
+
+/*bulk 方式的row插入操作*/
+int __wt_bulk_insert_row(WT_SESSION_IMPL* session, WT_CURSOR_BULK* cbulk)
+{
+	WT_BTREE *btree;
+	WT_CURSOR *cursor;
+	WT_KV *key, *val;
+	WT_RECONCILE *r;
+	int ovfl_key;
+
+	r = cbulk->reconcile;
+	btree = S2BT(session);
+	cursor = &cbulk->cbt.iface;
+
+	key = &r->k;
+	val = &r->v;
+	WT_RET(__rec_cell_build_leaf_key(session, r, cursor->key.data, cursor->key.size, &ovfl_key));
+	WT_RET(__rec_cell_build_val(session, r, cursor->value.data, cursor->value.size, (uint64_t)0));
+
+	/*确定boundary范围,reconile 的剩余的空间无法存下k/v*/
+	if (key->len + val->len > r->space_avail){
+		if (r->raw_compression)
+			WT_RET(__rec_split_raw(session, r, key->len + val->len));
+		else {
+			/*
+			* Turn off prefix compression until a full key written
+			* to the new page, and (unless already working with an
+			* overflow key), rebuild the key without compression.
+			*/
+			if (r->key_pfx_compress_conf) {
+				r->key_pfx_compress = 0;
+				if (!ovfl_key)
+					WT_RET(__rec_cell_build_leaf_key(session, r, NULL, 0, &ovfl_key));
+			}
+
+			WT_RET(__rec_split(session, r, key->len + val->len));
+		}
+	}
+
+	/*将kv拷贝到r缓冲区中*/
+	__rec_copy_incr(session, r, key);
+	if (val->len == 0)
+		r->any_empty_value = 1;
+	else{
+		r->all_empty_value = 0;
+		if (btree->dictionary)
+			WT_RET(__rec_dict_replace(session, r, 0, val));
+		__rec_copy_incr(session, r, val);
+	}
+	/* Update compression state. */
+	__rec_key_state_update(r, ovfl_key);
+
+	return 0;
+}
+
+/*Check if a bulk-loaded fixed-length column store page needs to split.*/
+static inline int __rec_col_fix_bulk_insert_split_check(WT_CURSOR_BULK* cbulk)
+{
+	WT_BTREE *btree;
+	WT_RECONCILE *r;
+	WT_SESSION_IMPL *session;
+
+	session = (WT_SESSION_IMPL*)cbulk->cbt.iface.session;
+	r = cbulk->reconcile;
+	btree = S2BT(session);
+
+	if (cbulk->entry == cbulk->nrecs){
+		if (cbulk->entry != 0){
+			__rec_incr(session, r, cbulk->entry, __bitstr_size((size_t)cbulk->entry * btree->bitcnt));
+			/*对reconcile中的buf进行split操作*/
+			WT_RET(__rec_split(session, r, 0));
+		}
+		cbulk->entry = 0;
+		cbulk->nrecs = WT_FIX_BYTES_TO_ENTRIES(btree, r->space_avail);
+	}
+
+	return 0;
+}
+
+/*Fix-length的column方式的bulk(批量插入)插入操作实现*/
+int __wt_bulk_insert_fix(WT_SESSION_IMPL* session, WT_CURSOR_BULK* cbulk)
+{
+	WT_BTREE *btree;
+	WT_CURSOR *cursor;
+	WT_RECONCILE *r;
+	uint32_t entries, offset, page_entries, page_size;
+	const uint8_t *data;
+
+	r = cbulk->reconcile;
+	btree = S2BT(session);
+	cursor = &cbulk->cbt.iface;
+
+	if (cbulk->bitmap){
+		if (((r->recno - 1) * btree->bitcnt) & 0x7)
+			WT_RET_MSG(session, EINVAL, "Bulk bitmap load not aligned on a byte boundary");
+		data = cursor->value.data;
+		for (entries = (uint32_t)cursor->value.size; entries > 0; entries -= page_entries, data += page_size){
+			WT_RET(__rec_col_fix_bulk_insert_split_check(cbulk));
+
+			page_entries = WT_MIN(entries, cbulk->nrecs - cbulk->entry);
+			page_size = __bitstr_size(page_entries * btree->bitcnt); /*计算page_entries字节长度*/
+			offset = __bitstr_size(cbulk->entry * btree->bitcnt); /*计算当前cbulk对应的entry的指针位置*/
+			memcpy(r->first_free + offset, data, page_size);
+
+			cbulk->entry += page_entries;
+			r->recno += page_entries;
+		}
+		return 0;
+	}
+
+	WT_RET(__rec_col_fix_bulk_insert_split_check(cbulk));
+
+	__bit_setv(r->first_free, cbulk->entry, btree->bitcnt, ((uint8_t *)cursor->value.data)[0]);
+	++cbulk->entry;
+	++r->recno;
+
+	return 0;
+}
+
+/*Variable-length column-store bulk insert*/
+int __wt_bulk_insert_var(WT_SESSION_IMPL* session, WT_CURSOR_BULK* cbulk)
+{
+	WT_BTREE *btree;
+	WT_KV *val;
+	WT_RECONCILE *r;
+
+	r = cbulk->reconcile;
+	btree = S2BT(session);
+
+	/*
+	* Store the bulk cursor's last buffer, not the current value, we're
+	* creating a duplicate count, which means we want the previous value
+	* seen, not the current value.
+	*/
+	val = &r->v;
+	WT_RET(__rec_cell_build_val(session, r, cbulk->last.data, cbulk->last.size, cbulk->rle));
+
+	/*boundary split*/
+	if (val->len > r->space_avail)
+		WT_RET(r->raw_compression ? __rec_split_raw(session, r, val->len) : __rec_split(session, r, val->len));
+
+	if (btree->dictionary)
+		WT_RET(__rec_dict_replace(session, r, cbulk->rle, val));
+	__rec_copy_incr(session, r, val);
+
+	r->recno += cbulk->rle;
+
+	return 0;
+}
+
+/*获得reconcile addr的类型值*/
+static inline u_int __rec_vtype(WT_ADDR* addr)
+{
+	if (addr->type == WT_ADDR_INT)
+		return (WT_CELL_ADDR_INT);
+	if (addr->type == WT_ADDR_LEAF)
+		return (WT_CELL_ADDR_LEAF);
+	return (WT_CELL_ADDR_LEAF_NO);
+}
+
+/* 将split page中的 mod_multi中数据合并到reconcile buf中*/
+static int __rec_col_merge(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page)
+{
+	WT_ADDR *addr;
+	WT_KV *val;
+	WT_MULTI *multi;
+	WT_PAGE_MODIFY *mod;
+	uint32_t i;
+
+	mod = page->modify;
+	val = &r->v;
+
+	for (multi = mod->mod_multi, i = 0; i < mod->mod_multi_entries; ++multi, ++i){
+		r->recno = multi->key.recno;
+
+		addr = &multi->addr;
+		__rec_cell_build_addr(r, addr->addr, addr->size, __rec_vtype(addr), r->recno);
+
+		if (val->len > r->space_avail)
+			WT_RET(r->raw_compression ? __rec_split_raw(session, r, val->len) : __rec_split(session, r, val->len));
+
+		__rec_copy_incr(session, r, val);
+	}
+
+	return 0;
+}
+
+/*对一个column store的internal page做reconcile*/
+static int __rec_col_int(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page)
+{
+	WT_ADDR *addr;
+	WT_BTREE *btree;
+	WT_CELL_UNPACK *vpack, _vpack;
+	WT_DECL_RET;
+	WT_KV *val;
+	WT_PAGE *child;
+	WT_REF *ref;
+	int hazard, state;
+
+	btree = S2BT(session);
+	child = NULL;
+	hazard = 0;
+
+	val = &r->v;
+	vpack = &_vpack;
+
+	WT_RET(__rec_split_init(session, r, page, page->pg_intl_recno, btree->maxleafpage));
+
+	WT_INTL_FOREACH_BEGIN(session, page, ref) {
+		r->recno = ref->key.recno;
+
+		WT_ERR(__rec_child_modify(session, r, ref, &hazard, &state));
+		addr = NULL;
+		child = ref->page;
+
+		/*对应的孩子page被删除了，不需要进行reconcile这个ref记录*/
+		if (state == WT_CHILD_IGNORE){
+			CHILD_RELEASE_ERR(session, hazard, ref);
+			continue;
+		}
+
+		if (state == WT_CHILD_MODIFIED){
+			switch (F_ISSET(child->modify, WT_PM_REC_MASK)){
+			case WT_PM_REC_EMPTY:  /*空页*/
+				CHILD_RELEASE_ERR(session, hazard, ref);
+				continue;
+
+			case WT_PM_REC_MULTIBLOCK:
+				WT_ERR(__rec_col_merge(session, r, child)); /*将split中的孩子节点修改数据合并到这一层*/
+				CHILD_RELEASE_ERR(session, hazard, ref);
+				continue;
+
+			case WT_PM_REC_REPLACE:
+				addr = &child->modify->mod_replace; /*替换覆盖??*/
+				break;
+
+				WT_ILLEGAL_VALUE_ERR(session);
+			}
+		}
+		else
+			WT_ASSERT(session, state == 0);
+
+		if (addr == NULL && __wt_off_page(page, ref->addr))
+			addr = ref->addr;
+		if (addr == NULL){ /*从ref中获取block addr作为val写入到reconcile buf中*/
+			__wt_cell_unpack(ref->addr, vpack);
+			val->buf.data = ref->addr;
+			val->buf.size = __wt_cell_total_len(vpack);
+			val->cell_len = 0;
+			val->len = val->buf.size;
+		}
+		else
+			__rec_cell_build_addr(r, addr->addr, addr->size, __rec_vtype(addr), ref->key.recno);
+
+		CHILD_RELEASE_ERR(session, hazard, ref);
+
+		if (val->len > r->space_avail)
+			WT_ERR(r->raw_compression ? __rec_split_raw(session, r, val->len) : __rec_split(session, r, val->len));
+
+		__rec_copy_incr(session, r, val);
+	}WT_INTL_FOREACH_END;
+
+	return __rec_split_finish(session, r);
+
+err:
+	CHILD_RELEASE(session, hazard, ref);
+	return ret;
+}
+
+/*定长column store的叶子page的reconcile操作*/
+static int __rec_col_fix(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page)
+{
+	WT_BTREE *btree;
+	WT_INSERT *ins;
+	WT_UPDATE *upd;
+	uint64_t recno;
+	uint32_t entry, nrecs;
+
+	btree = S2BT(session);
+
+	WT_RET(__rec_split_init(session, r, page, page->pg_fix_recno, btree->maxleafpage));
+	/*获得session对应事务可见的修改数据*/
+	WT_SKIP_FOREACH(ins, WT_COL_UPDATE_SINGLE(page)) {
+		WT_RET(__rec_txn_read(session, r, ins, NULL, NULL, &upd));
+		if (upd != NULL)
+			__bit_setv_recno(page, WT_INSERT_RECNO(ins), btree->bitcnt, ((uint8_t *)WT_UPDATE_DATA(upd))[0]);
+	}
+
+	/*将数据拷贝到reconcile的buf中*/
+	memcpy(r->first_free, page->pg_fix_bitf, __bitstr_size((size_t)page->pg_fix_entries * btree->bitcnt));
+
+	entry = page->pg_fix_entries;
+	nrecs = WT_FIX_BYTES_TO_ENTRIES(btree, r->space_avail) - page->pg_fix_entries;
+	r->recno += entry;
+
+	/* Walk any append list. */
+	WT_SKIP_FOREACH(ins, WT_COL_APPEND(page)) {
+		WT_RET(__rec_txn_read(session, r, ins, NULL, NULL, &upd));
+		if (upd == NULL)
+			continue;
+		for (;;) {
+			/*
+			* The application may have inserted records which left
+			* gaps in the name space.
+			*/
+			for (recno = WT_INSERT_RECNO(ins); nrecs > 0 && r->recno < recno; --nrecs, ++entry, ++r->recno)
+				__bit_setv(r->first_free, entry, btree->bitcnt, 0);
+
+			if (nrecs > 0) {
+				__bit_setv(r->first_free, entry, btree->bitcnt, ((uint8_t *)WT_UPDATE_DATA(upd))[0]);
+				--nrecs;
+				++entry;
+				++r->recno;
+				break;
+			}
+
+			/* If everything didn't fit, update the counters and split.
+			 * Boundary: split or write the page.
+			 */
+			__rec_incr(session, r, entry, __bitstr_size((size_t)entry * btree->bitcnt));
+			WT_RET(__rec_split(session, r, 0));
+
+			entry = 0;
+			nrecs = WT_FIX_BYTES_TO_ENTRIES(btree, r->space_avail);
+		}
+	}
+
+	__rec_incr(session, r, entry, __bitstr_size((size_t)entry * btree->bitcnt));
+
+	return __rec_split_finish(session, r);
+}
+
+/*对修复的fixed-width 列式存储page做reconcile操作*/
+static int __rec_col_fix_slvg(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page, WT_SALVAGE_COOKIE* salvage)
+{
+	WT_BTREE *btree;
+	uint64_t page_start, page_take;
+	uint32_t entry, nrecs;
+
+	btree = S2BT(session);
+
+	WT_RET(__rec_split_init(session, r, page, page->pg_fix_recno, btree->maxleafpage));
+
+	page_take = salvage->take == 0 ? page->pg_fix_entries : salvage->take;
+	page_start = salvage->skip == 0 ? 0 : salvage->skip;
+
+	/* Calculate the number of entries per page. */
+	entry = 0;
+	nrecs = WT_FIX_BYTES_TO_ENTRIES(btree, r->space_avail);
+	/*跳过错误的数据位置*/
+	for (; nrecs > 0 && salvage->missing > 0; --nrecs, --salvage->missing, ++entry)
+		__bit_setv(r->first_free, entry, btree->bitcnt, 0);
+	/*将有效的修正后的数据写入到对应的位置*/
+	for (; nrecs > 0 && page_take > 0; --nrecs, --page_take, ++page_start, ++entry)
+		__bit_setv(r->first_free, entry, btree->bitcnt, __bit_getv(page->pg_fix_bitf, (uint32_t)page_start, btree->bitcnt));
+
+	r->recno += entry;
+	__rec_incr(session, r, entry, __bitstr_size((size_t)entry * btree->bitcnt));
+
+	/*
+	* We can't split during salvage -- if everything didn't fit, it's all gone wrong.
+	*/
+	if (salvage->missing != 0 || page_take != 0)
+		WT_PANIC_RET(session, WT_PANIC, "%s page too large, attempted split during salvage", __wt_page_type_string(page->type));
+
+	/* Write the page. */
+	return __rec_split_finish(session, r);
 }
 
 
