@@ -976,7 +976,7 @@ static int __rec_dict_replace(WT_SESSION_IMPL* session, WT_RECONCILE* r, uint64_
 
 	if (dp->cell == NULL)
 		dp->cell = r->first_free;
-	else{ /*将值拷贝到val中cell中*/
+	else{ /*将值拷贝到val的cell中*/
 		offset = WT_PTRDIFF(r->first_free, dp->cell);
 		val->len = val->cell_len = __wt_cell_pack_copy(&val->cell, rle, offset);
 		val->buf.data = NULL;
