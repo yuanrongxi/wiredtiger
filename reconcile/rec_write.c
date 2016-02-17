@@ -2522,6 +2522,903 @@ static int __rec_col_var_helper(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_SA
 	return 0;
 }
 
+/*变长列式存储的叶子page进行reconcile操作*/
+static int __rec_col_var(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page, WT_SALVAGE_COOKIE* salvage)
+{
+	enum { OVFL_IGNORE, OVFL_UNUSED, OVFL_USED } ovfl_state;
+	WT_BTREE *btree;
+	WT_CELL *cell;
+	WT_CELL_UNPACK *vpack, _vpack;
+	WT_COL *cip;
+	WT_DECL_ITEM(orig);
+	WT_DECL_RET;
+	WT_INSERT *ins;
+	WT_ITEM *last;
+	WT_UPDATE *upd;
+	uint64_t n, nrepeat, repeat_count, rle, skip, src_recno;
+	uint32_t i, size;
+	int deleted, last_deleted, orig_deleted, update_no_copy;
+	const void *data;
+
+	btree = S2BT(session);
+	last = r->last;
+	vpack = &_vpack;
+
+	WT_RET(__wt_scr_alloc(session, 0, &orig));
+	data = NULL;
+	size = 0;
+	upd = NULL;
+
+	WT_RET(__rec_split_init(session, r, page, page->pg_var_recno, btree->maxleafpage));
+
+	rle = 0;
+	last_deleted = 0;
+
+	/*
+	* The salvage code may be calling us to reconcile a page where there
+	* were missing records in the column-store name space.  If taking the
+	* first record from on the page, it might be a deleted record, so we
+	* have to give the RLE code a chance to figure that out.  Else, if
+	* not taking the first record from the page, write a single element
+	* representing the missing records onto a new page.  (Don't pass the
+	* salvage cookie to our helper function in this case, we're handling
+	* one of the salvage cookie fields on our own, and we don't need the
+	* helper function's assistance.)
+	*/
+	if (salvage != NULL && salvage->missing != 0) {
+		if (salvage->skip == 0) {
+			rle = salvage->missing;
+			last_deleted = 1;
+
+			/* Correct the number of records we're going to "take", pretending the missing records were on the page.*/
+			salvage->take += salvage->missing;
+		}
+		else
+			WT_ERR(__rec_col_var_helper(session, r, NULL, NULL, 1, 0, salvage->missing));
+	}
+
+	src_recno = r->recno + rle;
+
+	WT_COL_FOREACH(page, cip, i){
+		ovfl_state = OVFL_IGNORE;
+		if ((cell = WT_COL_PTR(page, cip)) == NULL) {
+			nrepeat = 1;
+			ins = NULL;
+			orig_deleted = 1;
+		}
+		else {
+			__wt_cell_unpack(cell, vpack);
+			nrepeat = __wt_cell_rle(vpack);
+			ins = WT_SKIP_FIRST(WT_COL_UPDATE(page, cip));
+
+			/*
+			* If the original value is "deleted", there's no value
+			* to compare, we're done.
+			*/
+			orig_deleted = vpack->type == WT_CELL_DEL ? 1 : 0;
+			if (orig_deleted)
+				goto record_loop;
+
+			/*
+			* Overflow items are tricky: we don't know until we're
+			* finished processing the set of values if we need the
+			* overflow value or not.  If we don't use the overflow
+			* item at all, we have to discard it from the backing
+			* file, otherwise we'll leak blocks on the checkpoint.
+			* That's safe because if the backing overflow value is
+			* still needed by any running transaction, we'll cache
+			* a copy in the reconciliation tracking structures.
+			*
+			* Regardless, we avoid copying in overflow records: if
+			* there's a WT_INSERT entry that modifies a reference
+			* counted overflow record, we may have to write copies
+			* of the overflow record, and in that case we'll do the
+			* comparisons, but we don't read overflow items just to
+			* see if they match records on either side.
+			*/
+			if (vpack->ovfl) {
+				ovfl_state = OVFL_UNUSED;
+				goto record_loop;
+			}
+
+			/*
+			* If data is Huffman encoded, we have to decode it in
+			* order to compare it with the last item we saw, which
+			* may have been an update string.  This guarantees we
+			* find every single pair of objects we can RLE encode,
+			* including applications updating an existing record
+			* where the new value happens (?) to match a Huffman-
+			* encoded value in a previous or next record.
+			*/
+			WT_ERR(__wt_dsk_cell_data_ref(session, WT_PAGE_COL_VAR, vpack, orig));
+		}
+
+record_loop:
+		for (n = 0; n < nrepeat; n += repeat_count, src_recno += repeat_count) {
+			upd = NULL;
+			if (ins != NULL && WT_INSERT_RECNO(ins) == src_recno) {
+				WT_ERR(__rec_txn_read(session, r, ins, NULL, vpack, &upd));
+				ins = WT_SKIP_NEXT(ins);
+			}
+			if (upd != NULL) {
+				update_no_copy = 1;	/* No data copy */
+				repeat_count = 1;	/* Single record */
+
+				deleted = WT_UPDATE_DELETED_ISSET(upd);
+				if (!deleted) {
+					data = WT_UPDATE_DATA(upd);
+					size = upd->size;
+				}
+			}
+			else if (vpack->raw == WT_CELL_VALUE_OVFL_RM) {
+				update_no_copy = 1;	/* No data copy */
+				repeat_count = 1;	/* Single record */
+
+				deleted = 0;
+
+				/*
+				* If doing update save and restore, there's an
+				* update that's not globally visible, and the
+				* underlying value is a removed overflow value,
+				* we end up here.
+				*
+				* When the update save/restore code noticed the
+				* removed overflow value, it appended a copy of
+				* the cached, original overflow value to the
+				* update list being saved (ensuring the on-page
+				* item will never be accessed after the page is
+				* re-instantiated), then returned a NULL update
+				* to us.
+				*
+				* Assert the case: if we remove an underlying
+				* overflow object, checkpoint reconciliation
+				* should never see it again, there should be a
+				* visible update in the way.
+				*
+				* Write a placeholder.
+				*/
+				WT_ASSERT(session, F_ISSET(r, WT_SKIP_UPDATE_RESTORE));
+
+				data = "@";
+				size = 1;
+			}
+			else {
+				update_no_copy = 0;	/* Maybe data copy */
+
+				/*
+				* The repeat count is the number of records up
+				* to the next WT_INSERT record, or up to the
+				* end of the entry if we have no more WT_INSERT
+				* records.
+				*/
+				if (ins == NULL)
+					repeat_count = nrepeat - n;
+				else
+					repeat_count = WT_INSERT_RECNO(ins) - src_recno;
+
+				deleted = orig_deleted;
+				if (deleted)
+					goto compare;
+
+				/*
+				* If we are handling overflow items, use the
+				* overflow item itself exactly once, after
+				* which we have to copy it into a buffer and
+				* from then on use a complete copy because we
+				* are re-creating a new overflow record each
+				* time.
+				*/
+				switch (ovfl_state) {
+				case OVFL_UNUSED:
+					/*
+					* An as-yet-unused overflow item.
+					*
+					* We're going to copy the on-page cell,
+					* write out any record we're tracking.
+					*/
+					if (rle != 0) {
+						WT_ERR(__rec_col_var_helper(session, r, salvage, last, last_deleted, 0, rle));
+						rle = 0;
+					}
+
+					last->data = vpack->data;
+					last->size = vpack->size;
+					WT_ERR(__rec_col_var_helper(session, r, salvage, last, 0, WT_CELL_VALUE_OVFL, repeat_count));
+
+					/* Track if page has overflow items. */
+					r->ovfl_items = 1;
+
+					ovfl_state = OVFL_USED;
+					continue;
+				case OVFL_USED:
+					/*
+					* Original is an overflow item; we used
+					* it for a key and now we need another
+					* copy; read it into memory.
+					*/
+					WT_ERR(__wt_dsk_cell_data_ref(session, WT_PAGE_COL_VAR, vpack, orig));
+
+					ovfl_state = OVFL_IGNORE;
+					/* FALLTHROUGH */
+				case OVFL_IGNORE:
+					/*
+					* Original is an overflow item and we
+					* were forced to copy it into memory,
+					* or the original wasn't an overflow
+					* item; use the data copied into orig.
+					*/
+					data = orig->data;
+					size = (uint32_t)orig->size;
+					break;
+				}
+			}
+compare:
+			   /* If we have a record against which to compare, and
+				* the records compare equal, increment the rle counter
+				* and continue.If the records don't compare equal,
+				* output the last record and swap the last and current
+				* buffers : do NOT update the starting record number,
+				*we've been doing that all along.
+				*/
+				if (rle != 0) {
+					if ((deleted && last_deleted) || (!last_deleted && !deleted && last->size == size && memcmp(last->data, data, size) == 0)) {
+						rle += repeat_count;
+						continue;
+					}
+					WT_ERR(__rec_col_var_helper(session, r, salvage, last, last_deleted, 0, rle));
+				}
+
+			/*
+			* Swap the current/last state.
+			*
+			* Reset RLE counter and turn on comparisons.
+			*/
+			if (!deleted) {
+				/*
+				* We can't simply assign the data values into
+				* the last buffer because they may have come
+				* from a copy built from an encoded/overflow
+				* cell and creating the next record is going
+				* to overwrite that memory.  Check, because
+				* encoded/overflow cells aren't that common
+				* and we'd like to avoid the copy.  If data
+				* was taken from the current unpack structure
+				* (which points into the page), or was taken
+				* from an update structure, we can just use
+				* the pointers, they're not moving.
+				*/
+				if (data == vpack->data || update_no_copy) {
+					last->data = data;
+					last->size = size;
+				}
+				else
+					WT_ERR(__wt_buf_set(session, last, data, size));
+			}
+			last_deleted = deleted;
+			rle = repeat_count;
+		}
+
+		/*
+		* If we had a reference to an overflow record we never used,
+		* discard the underlying blocks, they're no longer useful.
+		*
+		* One complication: we must cache a copy before discarding the
+		* on-disk version if there's a transaction in the system that
+		* might read the original value.
+		*/
+		if (ovfl_state == OVFL_UNUSED && vpack->raw != WT_CELL_VALUE_OVFL_RM)
+			WT_ERR(__wt_ovfl_cache(session, page, upd, vpack));
+	}
+
+	WT_SKIP_FOREACH(ins, WT_COL_APPEND(page)){
+		WT_ERR(__rec_txn_read(session, r, ins, NULL, NULL, &upd));
+		if (upd == NULL)
+			continue;
+
+		for (n = WT_INSERT_RECNO(ins); src_recno <= n; ++src_recno){
+			if (src_recno < n){
+				deleted = 1;
+				if (last_deleted){
+					skip = (n - src_recno) - 1;
+					rle += skip;
+					src_recno += skip;
+				}
+			}
+			else{
+				deleted = WT_UPDATE_DELETED_ISSET(upd);
+				if (!deleted) {
+					data = WT_UPDATE_DATA(upd);
+					size = upd->size;
+				}
+			}
+
+			if (rle != 0) {
+				if ((deleted && last_deleted) || (!last_deleted && !deleted && last->size == size && memcmp(last->data, data, size) == 0)) {
+					++rle;
+					continue;
+				}
+				WT_ERR(__rec_col_var_helper(session, r, salvage, last, last_deleted, 0, rle));
+			}
+
+			if (!deleted) {
+				last->data = data;
+				last->size = size;
+			}
+			last_deleted = deleted;
+			rle = 1;
+		}
+	}
+
+	if (rle != 0)
+		WT_ERR(__rec_col_val_helper(session, r, salvage, last, last_deleted, 0, rle));
+
+	ret = __rec_split_finish(session, r);
+
+err:
+	__wt_scr_free(session, &orig);
+}
+
+/*row store的internal page的reconcile操作*/
+static int __rec_row_int(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page)
+{
+	WT_ADDR *addr;
+	WT_BTREE *btree;
+	WT_CELL *cell;
+	WT_CELL_UNPACK *kpack, _kpack, *vpack, _vpack;
+	WT_DECL_RET;
+	WT_IKEY *ikey;
+	WT_KV *key, *val;
+	WT_PAGE *child;
+	WT_REF *ref;
+	size_t size;
+	u_int vtype;
+	int hazard, key_onpage_ovfl, ovfl_key, state;
+	const void *p;
+
+	btree = S2BT(session);
+	child = NULL;
+	hazard = 0;
+
+	key = &r->k;
+	kpack = &_kpack;
+	WT_CLEAR(*kpack);	/* -Wuninitialized */
+
+	val = &r->v;
+	vpack = &_vpack;
+	WT_CLEAR(*vpack);	/* -Wuninitialized */
+
+	WT_RET(__rec_split_init(session, r, page, 0, btree->maxintlpage));
+
+	r->cell_zero = 1;
+	WT_INTL_FOREACH_BEGIN(session, page, ref){
+		ikey = __wt_ref_key_instantiated(ref);
+		if (ikey == NULL || ikey->cell_offset == 0){
+			cell = NULL;
+			key_onpage_ovfl = 0;
+		}
+		else{/*确定key是否是overflow方式存储*/
+			cell = WT_PAGE_REF_OFFSET(page, ikey->cell_offset);
+			__wt_cell_unpack(cell, kpack);
+			key_onpage_ovfl = (kpack->ovfl && kpack->raw != WT_CELL_KEY_OVFL_RM);
+		}
+		/*将孩子节点修改为脏page,并获取其hazard pointer防止被evict出内存*/
+		WT_ERR(__rec_child_modify(session, r, ref, &hazard, &state));
+		addr = ref->addr;
+		child = ref->page;
+		/*孩子被标记为deleted，不需要对这个ref记录做reconcile操作*/
+		if (state == WT_CHILD_IGNORE){
+			if (key_onpage_ovfl)
+				WT_ERR(__wt_ovfl_discard_add(session, page, kpack->cell));
+			CHILD_RELEASE_ERR(session, hazard, ref);
+			continue;
+		}
+
+		/*
+		* Modified child.  Empty pages are merged into the parent and discarded.
+		*/
+		if (state == WT_CHILD_MODIFIED)
+			switch (F_ISSET(child->modify, WT_PM_REC_MASK)) {
+			case WT_PM_REC_EMPTY:
+				/*
+				* Overflow keys referencing empty pages are no
+				* longer useful, schedule them for discard.
+				* Don't worry about instantiation, internal
+				* page keys are always instantiated.  Don't
+				* worry about reuse, reusing this key in this
+				* reconciliation is unlikely.
+				*/
+				if (key_onpage_ovfl)
+					WT_ERR(__wt_ovfl_discard_add(session, page, kpack->cell));
+				CHILD_RELEASE_ERR(session, hazard, ref);
+				continue;
+			case WT_PM_REC_MULTIBLOCK:
+				/*
+				* Overflow keys referencing split pages are no
+				* longer useful (the split page's key is the
+				* interesting key); schedule them for discard.
+				* Don't worry about instantiation, internal
+				* page keys are always instantiated.  Don't
+				* worry about reuse, reusing this key in this
+				* reconciliation is unlikely.
+				*/
+				if (key_onpage_ovfl)
+					WT_ERR(__wt_ovfl_discard_add(session, page, kpack->cell));
+
+				WT_ERR(__rec_row_merge(session, r, child));
+				CHILD_RELEASE_ERR(session, hazard, ref);
+				continue;
+			case WT_PM_REC_REPLACE:
+				/*
+				* If the page is replaced, the page's modify
+				* structure has the page's address.
+				*/
+				addr = &child->modify->mod_replace;
+				break;
+			WT_ILLEGAL_VALUE_ERR(session);
+		}
+
+		/*addr是在page存储空间之外分配的内存,直接赋值就可以*/
+		if (__wt_off_page(page, addr)){
+			p = addr->addr;
+			size = addr->size;
+			vtype = (state == WT_CHILD_PROXY ? WT_CELL_ADDR_DEL : __rec_vtype(addr));
+		}
+		else{ /*连续内存中分配的addr,进行cell upack*/
+			__wt_cell_unpack(ref->addr, vpack);
+			p = vpack->data;
+			size = vpack->size;
+			vtype = (state == WT_CHILD_PROXY ? WT_CELL_ADDR_DEL : (u_int)(vpack->raw));
+		}
+
+		__rec_cell_build_addr(r, p, size, vtype, 0);
+		CHILD_RELEASE_ERR(session, hazard, ref);
+
+		/*
+		* Build key cell.
+		* Truncate any 0th key, internal pages don't need 0th keys.
+		*/
+		if (key_onpage_ovfl) {
+			key->buf.data = cell;
+			key->buf.size = __wt_cell_total_len(kpack);
+			key->cell_len = 0;
+			key->len = key->buf.size;
+			ovfl_key = 1;
+		}
+		else {
+			__wt_ref_key(page, ref, &p, &size);
+			WT_ERR(__rec_cell_build_int_key(session, r, p, r->cell_zero ? 1 : size, &ovfl_key));
+		}
+		r->cell_zero = 0;
+
+		/*将key/value写入到reconcile buf中*/
+		/* Boundary: split or write the page. */
+		if (key->len + val->len > r->space_avail) {
+			if (r->raw_compression)
+				WT_ERR(__rec_split_raw(session, r, key->len + val->len));
+			else {
+				/*
+				* In one path above, we copied address blocks
+				* from the page rather than building the actual
+				* key.  In that case, we have to build the key
+				* now because we are about to promote it.
+				*/
+				if (key_onpage_ovfl) {
+					WT_ERR(__wt_buf_set(session, r->cur, WT_IKEY_DATA(ikey), ikey->size));
+					key_onpage_ovfl = 0;
+				}
+				WT_ERR(__rec_split(session, r, key->len + val->len));
+			}
+		}
+
+		/* Copy the key and value onto the page. */
+		__rec_copy_incr(session, r, key);
+		__rec_copy_incr(session, r, val);
+
+		/* Update compression state. */
+		__rec_key_state_update(r, ovfl_key);
+	}WT_INTL_FOREACH_END;
+
+	return __rec_split_finish(session, r);
+err:
+	CHILD_RELEASE(session, hazard, ref);
+	return ret;
+}
+
+/*合并内存中split page 的修改合并到reconcile buf中*/
+static int __rec_row_merge(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page)
+{
+	WT_ADDR *addr;
+	WT_KV *key, *val;
+	WT_MULTI *multi;
+	WT_PAGE_MODIFY *mod;
+	uint32_t i;
+	int ovfl_key;
+
+	mod = page->modify;
+
+	key = &r->k;
+	val = &r->v;
+
+	/**/
+	for (multi = mod->mod_multi, i = 0; i < mod->mod_multi_entries; ++multi, ++i){
+		WT_RET(__rec_cell_build_int_key(session, r, WT_IKEY_DATA(multi->key.ikey), r->cell_zero ? 1 : multi->key.ikey->size, &ovfl_key));
+		r->cell_zero = 0;
+
+		addr = &multi->addr;
+
+		__rec_cell_build_addr(r, addr->addr, addr->size, __rec_vtype(addr), 0);
+
+		/* Boundary: split or write the page. */
+		if (key->len + val->len > r->space_avail)
+			WT_RET(r->raw_compression ? __rec_split_raw(session, r, key->len + val->len) : __rec_split(session, r, key->len + val->len));
+
+		/* Copy the key and value onto the page. */
+		__rec_copy_incr(session, r, key);
+		__rec_copy_incr(session, r, val);
+
+		/* Update compression state. */
+		__rec_key_state_update(r, ovfl_key);
+	}
+
+	return 0;
+}
+
+/*行存储方式leaf page的reconcile操作，内部没看懂*/
+static int __rec_row_leaf(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_PAGE *page, WT_SALVAGE_COOKIE *salvage)
+{
+	WT_BTREE *btree;
+	WT_CELL *cell, *val_cell;
+	WT_CELL_UNPACK *kpack, _kpack, *vpack, _vpack;
+	WT_DECL_ITEM(tmpkey);
+	WT_DECL_ITEM(tmpval);
+	WT_DECL_RET;
+	WT_IKEY *ikey;
+	WT_INSERT *ins;
+	WT_KV *key, *val;
+	WT_ROW *rip;
+	WT_UPDATE *upd;
+	size_t size;
+	uint64_t slvg_skip;
+	uint32_t i;
+	int dictionary, key_onpage_ovfl, ovfl_key;
+	const void *p;
+	void *copy;
+
+	btree = S2BT(session);
+	slvg_skip = salvage == NULL ? 0 : salvage->skip;
+
+	key = &r->k;
+	val = &r->v;
+
+	WT_RET(__rec_split_init(session, r, page, 0ULL, btree->maxleafpage));
+
+	/*
+	* Write any K/V pairs inserted into the page before the first from-disk key on the page.
+	*/
+	if ((ins = WT_SKIP_FIRST(WT_ROW_INSERT_SMALLEST(page))) != NULL)
+		WT_RET(__rec_row_leaf_insert(session, r, ins));
+
+	/*
+	* Temporary buffers in which to instantiate any uninstantiated keys
+	* or value items we need.
+	*/
+	WT_RET(__wt_scr_alloc(session, 0, &tmpkey));
+	WT_RET(__wt_scr_alloc(session, 0, &tmpval));
+
+	/* For each entry in the page... */
+	WT_ROW_FOREACH(page, rip, i) {
+		/*
+		* The salvage code, on some rare occasions, wants to reconcile
+		* a page but skip some leading records on the page.  Because
+		* the row-store leaf reconciliation function copies keys from
+		* the original disk page, this is non-trivial -- just changing
+		* the in-memory pointers isn't sufficient, we have to change
+		* the WT_CELL structures on the disk page, too.  It's ugly, but
+		* we pass in a value that tells us how many records to skip in
+		* this case.
+		*/
+		if (slvg_skip != 0) {
+			--slvg_skip;
+			continue;
+		}
+
+		/*
+		* Figure out the key: set any cell reference (and unpack it),
+		* set any instantiated key reference.
+		*/
+		copy = WT_ROW_KEY_COPY(rip);
+		(void)__wt_row_leaf_key_info(page, copy, &ikey, &cell, NULL, NULL);
+		if (cell == NULL)
+			kpack = NULL;
+		else {
+			kpack = &_kpack;
+			__wt_cell_unpack(cell, kpack);
+		}
+
+		/* Unpack the on-page value cell, and look for an update. */
+		if ((val_cell = __wt_row_leaf_value_cell(page, rip, NULL)) == NULL)
+			vpack = NULL;
+		else {
+			vpack = &_vpack;
+			__wt_cell_unpack(val_cell, vpack);
+		}
+		WT_ERR(__rec_txn_read(session, r, NULL, rip, vpack, &upd));
+
+		/* Build value cell. */
+		dictionary = 0;
+		if (upd == NULL) {
+			/*
+			* When the page was read into memory, there may not
+			* have been a value item.
+			*
+			* If there was a value item, check if it's a dictionary
+			* cell (a copy of another item on the page).  If it's a
+			* copy, we have to create a new value item as the old
+			* item might have been discarded from the page.
+			*/
+			if (vpack == NULL) {
+				val->buf.data = NULL;
+				val->cell_len = val->len = val->buf.size = 0;
+			}
+			else if (vpack->raw == WT_CELL_VALUE_COPY) {
+				/* If the item is Huffman encoded, decode it. */
+				if (btree->huffman_value == NULL) {
+					p = vpack->data;
+					size = vpack->size;
+				}
+				else {
+					WT_ERR(__wt_huffman_decode(session, btree->huffman_value, vpack->data, vpack->size, tmpval));
+					p = tmpval->data;
+					size = tmpval->size;
+				}
+				WT_ERR(__rec_cell_build_val(session, r, p, size, (uint64_t)0));
+				dictionary = 1;
+			}
+			else if (vpack->raw == WT_CELL_VALUE_OVFL_RM) {
+				/*
+				* If doing update save and restore in service
+				* of eviction, there's an update that's not
+				* globally visible, and the underlying value
+				* is a removed overflow value, we end up here.
+				*
+				* When the update save/restore code noticed the
+				* removed overflow value, it appended a copy of
+				* the cached, original overflow value to the
+				* update list being saved (ensuring any on-page
+				* item will never be accessed after the page is
+				* re-instantiated), then returned a NULL update
+				* to us.
+				*
+				* Assert the case.
+				*/
+				WT_ASSERT(session, F_ISSET(r, WT_SKIP_UPDATE_RESTORE));
+
+				/*
+				* If the key is also a removed overflow item,
+				* don't write anything at all.
+				*
+				* We don't have to write anything because the
+				* code re-instantiating the page gets the key
+				* to match the saved list of updates from the
+				* original page.  By not putting the key on
+				* the page, we'll move the key/value set from
+				* a row-store leaf page slot to an insert list,
+				* but that shouldn't matter.
+				*
+				* The reason we bother with the test is because
+				* overflows are expensive to write.  It's hard
+				* to imagine a real workload where this test is
+				* worth the effort, but it's a simple test.
+				*/
+				if (kpack != NULL && kpack->raw == WT_CELL_KEY_OVFL_RM)
+					goto leaf_insert;
+
+				/*
+				* The on-page value will never be accessed,
+				* write a placeholder record.
+				*/
+				WT_ERR(__rec_cell_build_val(session, r, "@", 1, (uint64_t)0));
+			}
+			else {
+				val->buf.data = val_cell;
+				val->buf.size = __wt_cell_total_len(vpack);
+				val->cell_len = 0;
+				val->len = val->buf.size;
+
+				/* Track if page has overflow items. */
+				if (vpack->ovfl)
+					r->ovfl_items = 1;
+			}
+		}
+		else {
+			/*
+			* If the original value was an overflow and we've not
+			* already done so, discard it.  One complication: we
+			* must cache a copy before discarding the on-disk
+			* version if there's a transaction in the system that
+			* might read the original value.
+			*/
+			if (vpack != NULL && vpack->ovfl && vpack->raw != WT_CELL_VALUE_OVFL_RM)
+				WT_ERR(__wt_ovfl_cache(session, page, rip, vpack));
+
+			/* If this key/value pair was deleted, we're done. */
+			if (WT_UPDATE_DELETED_ISSET(upd)) {
+				/*
+				* Overflow keys referencing discarded values
+				* are no longer useful, discard the backing
+				* blocks.  Don't worry about reuse, reusing
+				* keys from a row-store page reconciliation
+				* seems unlikely enough to ignore.
+				*/
+				if (kpack != NULL && kpack->ovfl && kpack->raw != WT_CELL_KEY_OVFL_RM) {
+					/*
+					* Keys are part of the name-space, we
+					* can't remove them from the in-memory
+					* tree; if an overflow key was deleted
+					* without being instantiated (for
+					* example, cursor-based truncation, do
+					* it now.
+					*/
+					if (ikey == NULL)
+						WT_ERR(__wt_row_leaf_key(session, page, rip, tmpkey, 1));
+
+					WT_ERR(__wt_ovfl_discard_add(session, page, kpack->cell));
+				}
+
+				/*
+				* We aren't actually creating the key so we
+				* can't use bytes from this key to provide
+				* prefix information for a subsequent key.
+				*/
+				tmpkey->size = 0;
+
+				/* Proceed with appended key/value pairs. */
+				goto leaf_insert;
+			}
+
+			/*
+			* If no value, nothing needs to be copied.  Otherwise,
+			* build the value's WT_CELL chunk from the most recent
+			* update value.
+			*/
+			if (upd->size == 0) {
+				val->buf.data = NULL;
+				val->cell_len = val->len = val->buf.size = 0;
+			}
+			else {
+				WT_ERR(__rec_cell_build_val(session, r, WT_UPDATE_DATA(upd), upd->size, (uint64_t)0));
+				dictionary = 1;
+			}
+		}
+
+		/*
+		* Build key cell.
+		*
+		* If the key is an overflow key that hasn't been removed, use
+		* the original backing blocks.
+		*/
+		key_onpage_ovfl = kpack != NULL && kpack->ovfl && kpack->raw != WT_CELL_KEY_OVFL_RM;
+		if (key_onpage_ovfl) {
+			key->buf.data = cell;
+			key->buf.size = __wt_cell_total_len(kpack);
+			key->cell_len = 0;
+			key->len = key->buf.size;
+			ovfl_key = 1;
+
+			/*
+			* We aren't creating a key so we can't use this key as
+			* a prefix for a subsequent key.
+			*/
+			tmpkey->size = 0;
+
+			/* Track if page has overflow items. */
+			r->ovfl_items = 1;
+		}
+		else {
+			/*
+			* Get the key from the page or an instantiated key, or
+			* inline building the key from a previous key (it's a
+			* fast path for simple, prefix-compressed keys), or by
+			* by building the key from scratch.
+			*/
+			if (__wt_row_leaf_key_info(page, copy, NULL, &cell, &tmpkey->data, &tmpkey->size))
+				goto build;
+
+			kpack = &_kpack;
+			__wt_cell_unpack(cell, kpack);
+			if (btree->huffman_key == NULL && kpack->type == WT_CELL_KEY && tmpkey->size >= kpack->prefix) {
+				/*
+				* The previous clause checked for a prefix of
+				* zero, which means the temporary buffer must
+				* have a non-zero size, and it references a
+				* valid key.
+				*/
+				WT_ASSERT(session, tmpkey->size != 0);
+
+				/*
+				* Grow the buffer as necessary, ensuring data
+				* data has been copied into local buffer space,
+				* then append the suffix to the prefix already
+				* in the buffer.
+				*
+				* Don't grow the buffer unnecessarily or copy
+				* data we don't need, truncate the item's data
+				* length to the prefix bytes.
+				*/
+				tmpkey->size = kpack->prefix;
+				WT_ERR(__wt_buf_grow(session, tmpkey, tmpkey->size + kpack->size));
+				memcpy((uint8_t *)tmpkey->mem + tmpkey->size, kpack->data, kpack->size);
+				tmpkey->size += kpack->size;
+			}
+			else
+				WT_ERR(__wt_row_leaf_key_copy(session, page, rip, tmpkey));
+build:
+			WT_ERR(__rec_cell_build_leaf_key(session, r, tmpkey->data, tmpkey->size, &ovfl_key));
+		}
+
+		/* Boundary: split or write the page. */
+		if (key->len + val->len > r->space_avail) {
+			if (r->raw_compression)
+				WT_ERR(__rec_split_raw(session, r, key->len + val->len));
+			else {
+				/*
+				* In one path above, we copied address blocks
+				* from the page rather than building the actual
+				* key.  In that case, we have to build the key
+				* now because we are about to promote it.
+				*/
+				if (key_onpage_ovfl) {
+					WT_ERR(__wt_dsk_cell_data_ref(session, WT_PAGE_ROW_LEAF, kpack, r->cur));
+					key_onpage_ovfl = 0;
+				}
+
+				/*
+				* Turn off prefix compression until a full key
+				* written to the new page, and (unless already
+				* working with an overflow key), rebuild the
+				* key without compression.
+				*/
+				if (r->key_pfx_compress_conf) {
+					r->key_pfx_compress = 0;
+					if (!ovfl_key)
+						WT_ERR(__rec_cell_build_leaf_key(session, r, NULL, 0, &ovfl_key));
+				}
+
+				WT_ERR(__rec_split(session, r, key->len + val->len));
+			}
+		}
+
+		/* Copy the key/value pair onto the page. */
+		__rec_copy_incr(session, r, key);
+		if (val->len == 0)
+			r->any_empty_value = 1;
+		else {
+			r->all_empty_value = 0;
+			if (dictionary && btree->dictionary)
+				WT_ERR(__rec_dict_replace(session, r, 0, val));
+			__rec_copy_incr(session, r, val);
+		}
+
+		/* Update compression state. */
+		__rec_key_state_update(r, ovfl_key);
+
+leaf_insert:	/* Write any K/V pairs inserted into the page after this key. */
+		if ((ins = WT_SKIP_FIRST(WT_ROW_INSERT(page, rip))) != NULL)
+			WT_ERR(__rec_row_leaf_insert(session, r, ins));
+	}
+
+	/* Write the remnant page. */
+	ret = __rec_split_finish(session, r);
+
+err:	
+	__wt_scr_free(session, &tmpkey);
+	__wt_scr_free(session, &tmpval);
+	return ret;
+}
+
+
+
+
 
 
 
