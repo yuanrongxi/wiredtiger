@@ -3416,6 +3416,370 @@ err:
 	return ret;
 }
 
+/*对对应的记录的update多版本reconcile操作*/
+static int __rec_row_leaf_insert(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_INSERT* ins)
+{
+	WT_BTREE *btree;
+	WT_KV *key, *val;
+	WT_UPDATE *upd;
+	int ovfl_key;
+
+	btree = S2BT(session);
+
+	key = &r->k;
+	val = &r->v;
+
+	for (; ins != NULL; ins = WT_SKIP_NEXT(ins)){
+		/*找到本事务可见的update*/
+		WT_RET(__rec_txn_read(session, r, ins, NULL, NULL, &upd));
+		if (upd == NULL || WT_UPDATE_DELETED_ISSET(upd))
+			continue;
+
+		/*构建val值，并设置给r->v*/
+		if (upd->size == 0)
+			val->len = 0;
+		else
+			WT_RET(__rec_cell_build_val(session, r, WT_UPDATE_DATA(upd), upd->size, (uint64_t)0));
+
+		/*构建key值，并设置给r->k*/
+		WT_RET(__rec_cell_build_leaf_key(session, r, WT_INSERT_KEY(ins), WT_INSERT_KEY_SIZE(ins), &ovfl_key));
+
+		/*boundary:split or write the page*/
+		if (key->len + val->len > r->space_avail) {
+			if (r->raw_compression)
+				WT_RET(__rec_split_raw(session, r, key->len + val->len));
+			else {
+				/*
+				* Turn off prefix compression until a full key
+				* written to the new page, and (unless already
+				* working with an overflow key), rebuild the
+				* key without compression.
+				*/
+				if (r->key_pfx_compress_conf) {
+					r->key_pfx_compress = 0;
+					if (!ovfl_key)
+						WT_RET(__rec_cell_build_leaf_key(session, r, NULL, 0, &ovfl_key));
+				}
+
+				WT_RET(__rec_split(session, r, key->len + val->len));
+			}
+		}
+		/*将k/v写入到reconcile buf中*/
+		__rec_copy_incr(session, r, key);
+		if (val->len == 0)
+			r->any_empty_value = 1;
+		else {
+			r->all_empty_value = 0;
+			if (btree->dictionary)
+				WT_RET(__rec_dict_replace(session, r, 0, val));
+			__rec_copy_incr(session, r, val);
+		}
+
+		/* Update compression state. */
+		__rec_key_state_update(r, ovfl_key);
+	}
+
+	return 0;
+}
+
+/*废弃已经被split page*/
+static int __rec_split_discard(WT_SESSION_IMPL* session, WT_PAGE* page)
+{
+	WT_BM *bm;
+	WT_DECL_RET;
+	WT_PAGE_MODIFY *mod;
+	WT_MULTI *multi;
+	uint32_t i;
+
+	bm = S2BT(session)->bm;
+	mod = page->modify;
+
+	/*
+	* A page that split is being reconciled for the second, or subsequent
+	* time; discard underlying block space used in the last reconciliation
+	* that is not being reused for this reconciliation.
+	*/
+	for (multi = mod->mod_multi, i = 0; i < mod->mod_multi_entries; ++multi, ++i){
+		switch (page->type){
+		case WT_PAGE_ROW_INT:
+		case WT_PAGE_ROW_LEAF:
+			__wt_free(session, multi->key.ikey);
+			break;
+		}
+
+		if (multi->skip == NULL){
+			if (multi->addr.reuse)
+				multi->addr.addr = NULL;
+			else {
+				WT_RET(bm->free(bm, session, multi->addr.addr, multi->addr.size));
+				__wt_free(session, multi->addr.addr);
+			}
+		}
+		else {
+			__wt_free(session, multi->skip);
+			__wt_free(session, multi->skip_dsk);
+		}
+	}
+	__wt_free(session, mod->mod_multi);
+	mod->mod_multi_entries = 0;
+
+	switch (page->type){
+	case WT_PAGE_COL_INT:
+	case WT_PAGE_ROW_INT:
+		if (mod->mod_root_split == NULL)
+			break;
+		WT_RET(__rec_split_discard(session, mod->mod_root_split));
+		/*删除掉对应的ovfl track数据*/
+		WT_RET(__wt_ovfl_track_wrapup(session, mod->mod_root_split));
+		__wt_page_out(session, &mod->mod_root_split);
+		break;
+	}
+
+	return ret;
+}
+
+/* Finish the reconciliation.*/
+static int __rec_write_wrapup(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_PAGE *page)
+{
+	WT_BM *bm;
+	WT_BOUNDARY *bnd;
+	WT_BTREE *btree;
+	WT_MULTI *multi;
+	WT_PAGE_MODIFY *mod;
+	WT_REF *ref;
+	size_t addr_size;
+	const uint8_t *addr;
+
+	btree = S2BT(session);
+	bm = btree->bm;
+	mod = page->modify;
+	ref = r->ref;
+
+	/*
+	* This page may have previously been reconciled, and that information
+	* is now about to be replaced.  Make sure it's discarded at some point,
+	* and clear the underlying modification information, we're creating a
+	* new reality.
+	*/
+	switch (F_ISSET(mod, WT_PM_REC_MASK)) {
+	case 0:	/*
+			* The page has never been reconciled before, free the original
+			* address blocks (if any).  The "if any" is for empty trees
+			* created when a new tree is opened or previously deleted pages
+			* instantiated in memory.
+			*
+			* The exception is root pages are never tracked or free'd, they
+			* are checkpoints, and must be explicitly dropped.
+			*/
+		if (__wt_ref_is_root(ref))
+			break;
+		if (ref->addr != NULL) {
+			/*
+			* Free the page and clear the address (so we don't free it twice).
+			*/
+			WT_RET(__wt_ref_info(session, ref, &addr, &addr_size, NULL));
+			WT_RET(bm->free(bm, session, addr, addr_size));
+			if (__wt_off_page(ref->home, ref->addr)) {
+				__wt_free(session, ((WT_ADDR *)ref->addr)->addr);
+				__wt_free(session, ref->addr);
+			}
+			ref->addr = NULL;
+		}
+		break;
+	case WT_PM_REC_EMPTY:				/* Page deleted */
+		break;
+	case WT_PM_REC_MULTIBLOCK:			/* Multiple blocks */
+		/*
+		* Discard the multiple replacement blocks.
+		*/
+		WT_RET(__rec_split_discard(session, page));
+		break;
+	case WT_PM_REC_REPLACE:				/* 1-for-1 page swap */
+		/*
+		* Discard the replacement leaf page's blocks.
+		*
+		* The exception is root pages are never tracked or free'd, they
+		* are checkpoints, and must be explicitly dropped.
+		*/
+		if (!__wt_ref_is_root(ref))
+			WT_RET(bm->free(bm, session, mod->mod_replace.addr, mod->mod_replace.size));
+
+		/* Discard the replacement page's address. */
+		__wt_free(session, mod->mod_replace.addr);
+		mod->mod_replace.size = 0;
+		break;
+
+	WT_ILLEGAL_VALUE(session);
+	}
+	F_CLR(mod, WT_PM_REC_MASK);
+
+	/*
+	* Wrap up overflow tracking.  If we are about to create a checkpoint,
+	* the system must be entirely consistent at that point (the underlying
+	* block manager is presumably going to do some action to resolve the
+	* list of allocated/free/whatever blocks that are associated with the
+	* checkpoint).
+	*/
+	WT_RET(__wt_ovfl_track_wrapup(session, page));
+
+	switch (r->bnd_next) {
+	case 0:						/* Page delete */
+		WT_RET(__wt_verbose(session, WT_VERB_RECONCILE, "page %p empty", page));
+		WT_STAT_FAST_DATA_INCR(session, rec_page_delete);
+
+		/* If this is the root page, we need to create a sync point. */
+		ref = r->ref;
+		if (__wt_ref_is_root(ref))
+			WT_RET(bm->checkpoint(bm, session, NULL, btree->ckpt, 0));
+
+		/*
+		* If the page was empty, we want to discard it from the tree
+		* by discarding the parent's key when evicting the parent.
+		* Mark the page as deleted, then return success, leaving the
+		* page in memory.  If the page is subsequently modified, that
+		* is OK, we'll just reconcile it again.
+		*/
+		F_SET(mod, WT_PM_REC_EMPTY);
+		break;
+	case 1:						/* 1-for-1 page swap */
+		/*
+		* Because WiredTiger's pages grow without splitting, we're
+		* replacing a single page with another single page most of
+		* the time.
+		*/
+		bnd = &r->bnd[0];
+
+		/*
+		* If we're saving/restoring changes for this page, there's
+		* nothing to write. Allocate, then initialize the array of
+		* replacement blocks.
+		*/
+		if (bnd->skip != NULL) {
+			WT_RET(__wt_calloc_def(session, r->bnd_next, &mod->mod_multi));
+			multi = mod->mod_multi;
+			multi->skip = bnd->skip;
+			multi->skip_entries = bnd->skip_next;
+			bnd->skip = NULL;
+			multi->skip_dsk = bnd->dsk;
+			bnd->dsk = NULL;
+			mod->mod_multi_entries = 1;
+
+			F_SET(mod, WT_PM_REC_MULTIBLOCK);
+			break;
+		}
+
+		/*
+		* If this is a root page, then we don't have an address and we
+		* have to create a sync point.  The address was cleared when
+		* we were about to write the buffer so we know what to do here.
+		*/
+		if (bnd->addr.addr == NULL)
+			WT_RET(__wt_bt_write(session, &r->dsk, NULL, NULL, 1, bnd->already_compressed));
+		else {
+			mod->mod_replace = bnd->addr;
+			bnd->addr.addr = NULL;
+		}
+
+		F_SET(mod, WT_PM_REC_REPLACE);
+		break;
+	default:					/* Page split */
+		WT_RET(__wt_verbose(session, WT_VERB_RECONCILE, "page %p reconciled into %" PRIu32 " pages", page, r->bnd_next));
+
+		switch (page->type) {
+		case WT_PAGE_COL_INT:
+		case WT_PAGE_ROW_INT:
+			WT_STAT_FAST_DATA_INCR(session, rec_multiblock_internal);
+			break;
+		case WT_PAGE_COL_FIX:
+		case WT_PAGE_COL_VAR:
+		case WT_PAGE_ROW_LEAF:
+			WT_STAT_FAST_DATA_INCR(session, rec_multiblock_leaf);
+			break;
+			WT_ILLEGAL_VALUE(session);
+		}
+
+		/* Display the actual split keys. */
+		if (WT_VERBOSE_ISSET(session, WT_VERB_SPLIT)) {
+			WT_DECL_ITEM(tkey);
+			WT_DECL_RET;
+			uint32_t i;
+
+			if (page->type == WT_PAGE_ROW_INT || page->type == WT_PAGE_ROW_LEAF)
+				WT_RET(__wt_scr_alloc(session, 0, &tkey));
+			for (bnd = r->bnd, i = 0; i < r->bnd_next; ++bnd, ++i)
+				switch (page->type) {
+				case WT_PAGE_ROW_INT:
+				case WT_PAGE_ROW_LEAF:
+					WT_ERR(__wt_buf_set_printable(session, tkey, bnd->key.data, bnd->key.size));
+					WT_ERR(__wt_verbose(session, WT_VERB_SPLIT, "split: starting key %.*s", (int)tkey->size, (const char *)tkey->data));
+					break;
+				case WT_PAGE_COL_FIX:
+				case WT_PAGE_COL_INT:
+				case WT_PAGE_COL_VAR:
+					WT_ERR(__wt_verbose(session, WT_VERB_SPLIT,"split: starting recno %" PRIu64, bnd->recno));
+					break;
+				WT_ILLEGAL_VALUE_ERR(session);
+			}
+		err:			
+			__wt_scr_free(session, &tkey);
+			WT_RET(ret);
+		}
+
+		if (r->bnd_next > r->bnd_next_max) {
+			r->bnd_next_max = r->bnd_next;
+			WT_STAT_FAST_DATA_SET(session, rec_multiblock_max, r->bnd_next_max);
+		}
+
+		switch (page->type) {
+		case WT_PAGE_ROW_INT:
+		case WT_PAGE_ROW_LEAF:
+			WT_RET(__rec_split_row(session, r, page));
+			break;
+		case WT_PAGE_COL_INT:
+		case WT_PAGE_COL_FIX:
+		case WT_PAGE_COL_VAR:
+			WT_RET(__rec_split_col(session, r, page));
+			break;
+			WT_ILLEGAL_VALUE(session);
+		}
+		F_SET(mod, WT_PM_REC_MULTIBLOCK);
+		break;
+	}
+
+	/*
+	* If updates were skipped, the tree isn't clean.  The checkpoint call
+	* cleared the tree's modified value before calling the eviction thread,
+	* so we must explicitly reset the tree's modified flag.  We insert a
+	* barrier after the change for clarity (the requirement is the value
+	* be set before a subsequent checkpoint reads it, and because the
+	* current checkpoint is waiting on this reconciliation to complete,
+	* there's no risk of that happening).
+	*
+	* Otherwise, if no updates were skipped, we have a new maximum
+	* transaction written for the page (used to decide if a clean page can
+	* be evicted).  The page only might be clean; if the write generation
+	* is unchanged since reconciliation started, clear it and update cache
+	* dirty statistics, if the write generation changed, then the page has
+	* been written since we started reconciliation, it cannot be
+	* discarded.
+	*/
+	if (r->leave_dirty) {
+		mod->first_dirty_txn = r->skipped_txn;
+
+		btree->modified = 1;
+		WT_FULL_BARRIER();
+	}
+	else {
+		mod->rec_max_txn = r->max_txn;
+
+		if (WT_ATOMIC_CAS4(mod->write_gen, r->orig_write_gen, 0))
+			__wt_cache_dirty_decr(session, page);
+	}
+
+	return 0;
+}
+
+
 
 
 
