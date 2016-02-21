@@ -224,7 +224,7 @@ typedef struct
 	uint16_t				dictionary_next, dictionary_slots;
 	WT_DICTIONARY*			dictionary_head[WT_SKIP_MAXDEPTH];
 
-	WT_KV					k, v;
+	WT_KV					k, v;					/*当前reconcile的k/v缓存空间对象*/
 
 	WT_ITEM*				cur, _cur;
 	WT_ITEM*				last, _last;
@@ -288,7 +288,7 @@ int __wt_reconcile(WT_SESSION_IMPL* session, WT_REF* ref, WT_SALVAGE_COOKIE* sal
 	mod = page->modify;
 
 	if (!__wt_page_is_modified(page))
-		WT_RET(session, WT_ERROR, "Attempt to reconcile a clean page.");
+		WT_RET_MSG(session, WT_ERROR, "Attempt to reconcile a clean page.");
 
 	WT_RET(__wt_verbose(session, WT_VERB_RECONCILE, "%s", __wt_page_type_string(page->type)));
 	WT_STAT_FAST_CONN_INCR(session, rec_pages);
@@ -346,7 +346,7 @@ int __wt_reconcile(WT_SESSION_IMPL* session, WT_REF* ref, WT_SALVAGE_COOKIE* sal
 	if (ret == 0)
 		ret = __rec_write_wrapup(session, r, page);
 	else
-		WT_TRET(__rec_write_wrap_err(session, r, page));
+		WT_TRET(__rec_write_wrapup_err(session, r, page));
 
 	if (locked)
 		WT_PAGE_UNLOCK(session, page);
@@ -781,7 +781,7 @@ static int __rec_child_modify(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_REF*
 		switch (r->tested_ref_state = ref->state){
 		case WT_REF_DISK:
 			/* On disk, not modified by definition. */
-			break;
+			goto done;
 
 		case WT_REF_DELETED:
 			if (!WT_ATOMIC_CAS4(ref->state, WT_REF_DELETED, WT_REF_LOCKED)) /*将ref状态设置为locked状态，然后进行reconcile孩子page删除操作*/
@@ -873,7 +873,7 @@ done:
 	return ret;
 }
 
-/*根据ref的信息删除对应的leaf page*/
+/*根据ref的信息删除对应的leaf page,并返回操作状态*/
 static int __rec_child_deleted(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_REF* ref, int* statep)
 {
 	WT_BM *bm;
@@ -948,6 +948,7 @@ static inline void __rec_copy_incr(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT
 	__rec_incr(session, r, 1, kv->len);
 }
 
+/*检查是否有值重复，如果有，做引用关联*/
 static int __rec_dict_replace(WT_SESSION_IMPL* session, WT_RECONCILE* r, uint64_t rle, WT_KV* val)
 {
 	WT_DICTIONARY *dp;
@@ -3775,6 +3776,493 @@ static int __rec_write_wrapup(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_PAGE
 		if (WT_ATOMIC_CAS4(mod->write_gen, r->orig_write_gen, 0))
 			__wt_cache_dirty_decr(session, page);
 	}
+
+	return 0;
+}
+
+/*Finish the reconciliation on error.*/
+static int __rec_write_wrapup_err(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_PAGE *page)
+{
+	WT_BM *bm;
+	WT_BOUNDARY *bnd;
+	WT_DECL_RET;
+	WT_MULTI *multi;
+	WT_PAGE_MODIFY *mod;
+	uint32_t i;
+
+	bm = S2BT(session)->bm;
+	mod = page->modify;
+
+	/*
+	 * Clear the address-reused flag from the multiblock reconciliation
+	 * information (otherwise we might think the backing block is being
+	 * reused on a subsequent reconciliation where we want to free it).
+	 */
+	if(F_ISSET(mod, WT_PM_REC_MASK()) == WT_PM_REC_MULTIBLOCK){
+		for(multi = mod->mod_multi, i = 0; i < mod->mod_multi_entries; ++multi, ++i)
+			multi->addr.reuse = 0;
+	}
+
+	/*
+	 * On error, discard blocks we've written, they're unreferenced by the
+	 * tree.  This is not a question of correctness, we're avoiding block
+	 * leaks.
+	 *
+	 * Don't discard backing blocks marked for reuse, they remain part of
+	 * a previous reconciliation.
+	 */
+	WT_RET(__wt_ovfl_track_wrapup_err(session, page));
+	for(bnd = r->bnd, i = 0; i < r->bnd_next; ++bnd, ++i){
+		if (bnd->addr.addr != NULL) {
+			if (bnd->addr.reuse)
+				bnd->addr.addr = NULL;
+			else {
+				WT_TRET(bm->free(bm, session, bnd->addr.addr, bnd->addr.size));
+				__wt_free(session, bnd->addr.addr);
+			}
+		}
+	}
+
+	return ret;
+}
+
+/*row store方式根据reconcile boundary进行split block确定*/
+static int __rec_split_row(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page)
+{
+	WT_BOUNDARY *bnd;
+	WT_MULTI *multi;
+	WT_PAGE_MODIFY *mod;
+	WT_REF *ref;
+	uint32_t i;
+	size_t size;
+	void *p;
+
+	mod = page->modify;
+
+	ref = r->ref;
+	/*计算boundary key*/
+	if(__wt_ref_is_root(ref))
+		WT_RET(__wt_buf_set(session, &r->bnd[0].key, "", 1));
+	else{
+		__wt_ref_key(ref->home, ref, &p, &size);
+		WT_RET(__wt_buf_set(session, &r->bnd[0].key, p, size));
+	}
+
+	/* Allocate, then initialize the array of replacement blocks. */
+	WT_RET(__wt_calloc_def(session, r->bnd_next, &mod->mod_multi));
+	/*将boundary作为split边界，进行split block设置*/
+	for(multi = mod->mod_multi, bnd = r->bnd, i = 0; i < r->bnd_next; ++multi, ++bnd, ++i){
+		WT_RET(__wt_row_ikey_alloc(session, 0, bnd->key.data, bnd->key.size, &multi->key.ikey));
+
+		if (bnd->skip == NULL) {
+			multi->addr = bnd->addr;
+			multi->addr.reuse = 0;
+			multi->size = bnd->size;
+			multi->cksum = bnd->cksum;
+			bnd->addr.addr = NULL;
+		} 
+		else {
+			multi->skip = bnd->skip;
+			multi->skip_entries = bnd->skip_next;
+			bnd->skip = NULL;
+			multi->skip_dsk = bnd->dsk;
+			bnd->dsk = NULL;
+		}
+	}
+
+	mod->mod_multi_entries = r->bnd_next;
+
+	return 0;
+}
+
+/*列式存储方式根据reconcile boundary进行split block确定*/
+static int __rec_split_col(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page)
+{
+	WT_BOUNDARY *bnd;
+	WT_MULTI *multi;
+	WT_PAGE_MODIFY *mod;
+	uint32_t i;
+
+	mod = page->modify;
+
+	/* Allocate, then initialize the array of replacement blocks. */
+	WT_RET(__wt_calloc_def(session, r->bnd_next, &mod->mod_multi));
+	multi = mod->mod_multi;
+	bnd = r->bnd;
+	for(i = 0; i < r->bnd_next; ++multi, ++bnd, ++i){
+		multi->key.recno = bnd->recno;
+		if (bnd->skip == NULL) {
+			multi->addr = bnd->addr;
+			multi->addr.reuse = 0;
+			multi->size = bnd->size;
+			multi->cksum = bnd->cksum;
+			bnd->addr.addr = NULL;
+		} else {
+			multi->skip = bnd->skip;
+			multi->skip_entries = bnd->skip_next;
+			bnd->skip = NULL;
+			multi->skip_dsk = bnd->dsk;
+			bnd->dsk = NULL;
+		}
+	}
+
+	mod->mod_multi_entries = r->bnd_next;
+	return 0;
+}
+
+/*通过data构建一个用于reconcile的internal key值*/
+static int __rec_cell_build_int_key(WT_SESSION_IMPL* session, WT_RECONCILE* r, const void* data, size_t size, int* is_ovflp)
+{
+	WT_BTREE* btree;
+	WT_KV* key;
+
+	*is_ovflp = 0;
+	btree = S2BT(session);
+
+	key = &r->k;
+	
+	/* Copy the bytes into the "current" and key buffers. */
+	WT_RET(__wt_buf_set(session, r->cur, data, size));
+	WT_RET(__wt_buf_set(session, &key->buf, data, size));
+	/*ovfl key，需要用另外的内存空间（cell）来做存储*/
+	if(size > btree->maxintlkey){
+		WT_STAT_FAST_DATA_INCR(session, rec_overflow_key_internal);
+
+		*is_ovflp = 1;
+		return (__rec_cell_build_ovfl(session, r, key, WT_CELL_KEY_OVFL, (uint64_t)0));
+	}
+
+	key->cell_len = __wt_cell_pack_int_key(&key->cell, key->buf.size);
+	key->len = key->cell_len + key->buf.size;
+
+	return 0;
+}
+
+/*通过data构建一个用于reconcile的leaf key值*/
+static int __rec_cell_build_leaf_key(WT_SESSION_IMPL* session, WT_RECONCILE* r, const void* data, size_t size, int* is_ovflp)
+{
+	WT_BTREE *btree;
+	WT_KV *key;
+	size_t pfx_max;
+	uint8_t pfx;
+	const uint8_t *a, *b;
+
+	*is_ovflp = 0;
+
+	btree = S2BT(session);
+
+	key = &r->k;
+
+	pfx = 0;
+	if(data == NULL){
+		WT_RET(__wt_buf_set(session, &key->buf, r->cur->data, r->cur->size));
+	}
+	else{ /*进行key的前缀压缩*/
+		WT_RET(__wt_buf_set(session, r->cur, data, size));
+		/*
+		 * Do prefix compression on the key.  We know by definition the
+		 * previous key sorts before the current key, which means the
+		 * keys must differ and we just need to compare up to the
+		 * shorter of the two keys.
+		 */
+		if (r->key_pfx_compress) {
+			/*
+			 * We can't compress out more than 256 bytes, limit the comparison to that.
+			 */
+			pfx_max = UINT8_MAX;
+			if (size < pfx_max)
+				pfx_max = size;
+			if (r->last->size < pfx_max)
+				pfx_max = r->last->size;
+
+			for (a = data, b = r->last->data; pfx < pfx_max; ++pfx)
+				if (*a++ != *b++)
+					break;
+
+			/*
+			 * Prefix compression may cost us CPU and memory when
+			 * the page is re-loaded, don't do it unless there's
+			 * reasonable gain.
+			 */
+			if (pfx < btree->prefix_compression_min)
+				pfx = 0;
+			else
+				WT_STAT_FAST_DATA_INCRV(session, rec_prefix_compression, pfx);
+		}
+		/* Copy the non-prefix bytes into the key buffer. */
+		WT_RET(__wt_buf_set(session, &key->buf, (uint8_t *)data + pfx, size - pfx));
+	}
+
+	/*huffman后缀压缩*/
+	if(btree->huffman_key != NULL)
+		WT_RET(__wt_huffman_encode(session, btree->huffman_key, key->buf.data, (uint32_t)key->buf.size, &key->buf));
+
+	/* Create an overflow object if the data won't fit. */
+	if (key->buf.size > btree->maxleafkey) {
+		/*
+		 * Overflow objects aren't prefix compressed -- rebuild any object that was prefix compressed.
+		 */
+		if (pfx == 0) {
+			WT_STAT_FAST_DATA_INCR(session, rec_overflow_key_leaf);
+
+			*is_ovflp = 1;
+			return (__rec_cell_build_ovfl(session, r, key, WT_CELL_KEY_OVFL, (uint64_t)0));
+		}
+		return __rec_cell_build_leaf_key(session, r, NULL, 0, is_ovflp);
+	}
+}
+
+/*构建一个reconcile的block addr的值*/
+static void __rec_cell_build_addr(WT_RECONCILE* r, const void* addr, size_t size, u_int cell_type, uint64_t recno)
+{
+	WT_KV *val;
+	val = &r->v;
+
+	val->buf.data = addr;
+	val->buf.size = size;
+	val->cell_len = __wt_cell_pack_addr(&val->cell, cell_type, recno, val->buf.size);
+	val->len = val->cell_len + val->buf.size;
+}
+
+/*通过data构建一个reconcile的value值*/
+static int __rec_cell_build_val(WT_SESSION_IMPL* session, WT_RECONCILE* r, const void* data, size_t size, uint64_t rle)
+{
+	WT_BTREE *btree;
+	WT_KV *val;
+
+	btree = S2BT(session);
+
+	val = &r->v;
+
+	val->buf.data = data;
+	val->buf.size = size;
+
+	if(size != 0){
+		/* Optionally compress the data using the Huffman engine. */
+		if (btree->huffman_value != NULL)
+			WT_RET(__wt_huffman_encode(ession, btree->huffman_value, val->buf.data, (uint32_t)val->buf.size, &val->buf));
+
+		/* Create an overflow object if the data won't fit. */
+		if (val->buf.size > btree->maxleafvalue) {
+			WT_STAT_FAST_DATA_INCR(session, rec_overflow_value);
+			return __rec_cell_build_ovfl(session, r, val, WT_CELL_VALUE_OVFL, rle);
+		}
+	}
+
+	val->cell_len = __wt_cell_pack_data(&val->cell, rle, val->buf.size);
+	val->len = val->cell_len + val->buf.size;
+
+	return 0;
+}
+
+/*为ovfl的kv数据分配一个ovfl block并将block addr更新到kv对应关系中，以便reconcile过程建立关联关系*/
+static int __rec_cell_build_ovfl(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_KV* kv, uint8_t type, uint64_t rle)
+{
+	WT_BM *bm;
+	WT_BTREE *btree;
+	WT_DECL_ITEM(tmp);
+	WT_DECL_RET;
+	WT_PAGE *page;
+	WT_PAGE_HEADER *dsk;
+	size_t size;
+	uint8_t *addr, buf[WT_BTREE_MAX_ADDR_COOKIE];
+
+	btree = S2BT(session);
+	bm = btree->bm;
+	page = r->page;
+
+	r->ovfl_items = 1;
+
+	/*
+	 * See if this overflow record has already been written and reuse it if
+	 * possible.  Else, write a new overflow record.
+	 */
+	if(!__wt_ovfl_reuse_search(session, page, &addr, &size, kv->buf.data, kv->buf.size)){ /*没有可以复用的block,进行新建一个*/
+		/* Allocate a buffer big enough to write the overflow record. */
+		size = kv->buf.size;
+		WT_RET(bm->write_size(bm, session, &size));
+		WT_RET(__wt_scr_alloc(session, size, &tmp));
+
+		/* Initialize the buffer: disk header and overflow record. */
+		dsk = tmp->mem;
+		memset(dsk, 0, WT_PAGE_HEADER_SIZE);
+		dsk->type = WT_PAGE_OVFL;
+		dsk->u.datalen = (uint32_t)kv->buf.size;
+		memcpy(WT_PAGE_HEADER_BYTE(btree, dsk), kv->buf.data, kv->buf.size);
+		dsk->mem_size = tmp->size = WT_PAGE_HEADER_BYTE_SIZE(btree) + (uint32_t)kv->buf.size;
+
+		/* Write the buffer. */
+		addr = buf;
+		WT_ERR(__wt_bt_write(session, tmp, addr, &size, 0, 0));
+
+		/*
+		 * Track the overflow record (unless it's a bulk load, which
+		 * by definition won't ever reuse a record.
+		 */
+		if (!r->is_bulk_load)
+			WT_ERR(__wt_ovfl_reuse_add(session, page, addr, size, kv->buf.data, kv->buf.size));
+	}
+
+	/* Set the callers K/V to reference the overflow record's address. */
+	WT_ERR(__wt_buf_set(session, &kv->buf, addr, size));
+
+	/* Build the cell and return. */
+	kv->cell_len = __wt_cell_pack_ovfl(&kv->cell, type, rle, kv->buf.size);
+	kv->len = kv->cell_len + kv->buf.size;
+
+err:
+	__wt_scr_free(session, &tmp);
+	return ret;
+}
+
+/*对dirctionary调表做检索查找，dirctionary是用来做多个KEY关联同样的值去重用了，防止存储空间浪费*/
+static WT_DICTIONARY* __rec_dictionary_skip_search(WT_DICTIONARY **head, uint64_t hash)
+{
+	WT_DICTIONARY **e;
+	int i;
+
+	/*
+	 * Start at the highest skip level, then go as far as possible at each
+	 * level before stepping down to the next.
+	 */
+	for (i = WT_SKIP_MAXDEPTH - 1, e = &head[i]; i >= 0;) {
+		if (*e == NULL) {		/* Empty levels */
+			--i;
+			--e;
+			continue;
+		}
+
+		/*
+		 * Return any exact matches: we don't care in what search level we found a match.
+		 */
+		if ((*e)->hash == hash)		/* Exact match */
+			return (*e);
+		if ((*e)->hash > hash) {	/* Drop down a level */
+			--i;
+			--e;
+		} else				/* Keep going at this level */
+			e = &(*e)->next[i];
+	}
+	return NULL;
+}
+
+/*为insert/remove操作定位skiplist的位置*/
+static void __rec_dictionary_skip_search_stack(WT_DICTIONARY** head, WT_DICTIONARY ***stack, uint64_t hash)
+{
+	WT_DICTIONARY **e;
+	int i;
+
+	/*
+	 * Start at the highest skip level, then go as far as possible at each level before stepping down to the next.
+	 */
+	for (i = WT_SKIP_MAXDEPTH - 1, e = &head[i]; i >= 0;){
+		if (*e == NULL || (*e)->hash > hash)
+			stack[i--] = e--;	/* Drop down a level */
+		else
+			e = &(*e)->next[i];	/* Keep going at this level */
+	}
+}
+
+/*插入一个dictionary实例到skiplist中*/
+static void __rec_dictionary_skip_insert(WT_DICTIONARY** head, WT_DICTIONARY* e, uint64_t hash)
+{
+	WT_DICTIONARY **stack[WT_SKIP_MAXDEPTH];
+	u_int i;
+
+	/* Insert the new entry into the skiplist. */
+	__rec_dictionary_skip_search_stack(head, stack, hash);
+	for (i = 0; i < e->depth; ++i) {
+		e->next[i] = *stack[i];
+		*stack[i] = e;
+	}
+}
+
+/*初始化reconcile中的dictionary管理器*/
+static int __rec_dictionary_init(WT_SESSION_IMPL *session, WT_RECONCILE *r, u_int slots)
+{
+	u_int depth, i;
+
+	/* Free any previous dictionary. */
+	__rec_dictionary_free(session, r);
+
+	r->dictionary_slots = slots;
+	WT_RET(__wt_calloc(session, r->dictionary_slots, sizeof(WT_DICTIONARY *), &r->dictionary));
+	for (i = 0; i < r->dictionary_slots; ++i) {
+		depth = __wt_skip_choose_depth(session);
+		WT_RET(__wt_calloc(session, 1, sizeof(WT_DICTIONARY) + depth * sizeof(WT_DICTIONARY *), &r->dictionary[i]));
+		r->dictionary[i]->depth = depth;
+	}
+	return 0;
+}
+
+/*撤销reconcile中的dictionary管理器*/
+static void __rec_dictionary_free(WT_SESSION_IMPL* session, WT_RECONCILE* r)
+{
+	u_int i;
+
+	if (r->dictionary == NULL)
+		return;
+
+	/*
+	 * We don't correct dictionary_slots when we fail during allocation,
+	 * but that's OK, the value is either NULL or a memory reference to
+	 * be free'd.
+	 */
+	for (i = 0; i < r->dictionary_slots; ++i)
+		__wt_free(session, r->dictionary[i]);
+	__wt_free(session, r->dictionary);
+}
+
+static void __rec_dictionary_reset(WT_RECONCILE* r)
+{
+	if (r->dictionary_slots) {
+		r->dictionary_next = 0;
+		memset(r->dictionary_head, 0, sizeof(r->dictionary_head));
+	}
+}
+
+/*根据val值在dictionary中查找是否有相同的值已经被reconcile了，如果已经进行了这个操作，那么只要需要保存一个关联引用即可*/
+static int __rec_dictionary_lookup(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_KV *val, WT_DICTIONARY **dpp)
+{
+	WT_DICTIONARY *dp, *next;
+	uint64_t hash;
+	int match;
+
+	*dpp = NULL;
+
+	/* Search the dictionary, and return any match we find. */
+	hash = __wt_hash_fnv64(val->buf.data, val->buf.size);
+	for (dp = __rec_dictionary_skip_search(r->dictionary_head, hash); dp != NULL && dp->hash == hash; dp = dp->next[0]) {
+		WT_RET(__wt_cell_pack_data_match(dp->cell, &val->cell, val->buf.data, &match));
+		if (match) {
+			WT_STAT_FAST_DATA_INCR(session, rec_dictionary);
+			*dpp = dp;
+			return (0);
+		}
+	}
+
+	/*
+	 * We're not doing value replacement in the dictionary.  We stop adding
+	 * new entries if we run out of empty dictionary slots (but continue to
+	 * use the existing entries).  I can't think of any reason a leaf page
+	 * value is more likely to be seen because it was seen more recently
+	 * than some other value: if we find working sets where that's not the
+	 * case, it shouldn't be too difficult to maintain a pointer which is
+	 * the next dictionary slot to re-use.
+	 */
+	if (r->dictionary_next >= r->dictionary_slots)
+		return 0;
+
+	/*
+	 * Set the hash value, we'll add this entry into the dictionary when we
+	 * write it into the page's disk image buffer (because that's when we
+	 * know where on the page it will be written).
+	 */
+	next = r->dictionary[r->dictionary_next++];
+	next->cell = NULL;		/* Not necessary, just cautious. */
+	next->hash = hash;
+	__rec_dictionary_skip_insert(r->dictionary_head, next, hash);
+	*dpp = next;
 
 	return 0;
 }
