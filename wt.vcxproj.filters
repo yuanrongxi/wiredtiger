@@ -70,6 +70,9 @@
     <Filter Include="c\reconcile">
       <UniqueIdentifier>{5ee75b76-cfab-438b-b921-44d5ffe5548b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\meta">
+      <UniqueIdentifier>{f918aca5-5df7-428f-8e75-d86f8a607a00}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -506,6 +509,15 @@
     </ClCompile>
     <ClCompile Include="reconcile\rec_write.c">
       <Filter>c\reconcile</Filter>
+    </ClCompile>
+    <ClCompile Include="meta\meta_turtle.c">
+      <Filter>c\meta</Filter>
+    </ClCompile>
+    <ClCompile Include="meta\meta_apply.c">
+      <Filter>c\meta</Filter>
+    </ClCompile>
+    <ClCompile Include="meta\meta_table.c">
+      <Filter>c\meta</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

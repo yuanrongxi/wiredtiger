@@ -2,12 +2,12 @@
 *定义WT_DATA_HANDLE数据结构
 **************************************************************************/
 
-#define WT_WITH_DHANDLE(s, d, e) do{					\
+#define	WT_WITH_DHANDLE(s, d, e) do {					\
 	WT_DATA_HANDLE *__saved_dhandle = (s)->dhandle;		\
 	(s)->dhandle = (d);									\
 	e;													\
-	(s)->DefineHandleTable = __saved_dhandle;			\
-}while(0)
+	(s)->dhandle = __saved_dhandle;						\
+} while (0)
 
 #define WT_WITH_BTREE(s, b, e)			WT_WITH_DHANDLE(s, (b)->dhandle, e)
 
