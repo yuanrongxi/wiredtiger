@@ -166,6 +166,7 @@
     <ClCompile Include="lsm\lsm_worker.c" />
     <ClCompile Include="lsm\lsm_work_unit.c" />
     <ClCompile Include="meta\meta_apply.c" />
+    <ClCompile Include="meta\meta_ext.c" />
     <ClCompile Include="meta\meta_table.c" />
     <ClCompile Include="meta\meta_turtle.c" />
     <ClCompile Include="packing\pack_api.c" />
