@@ -522,6 +522,9 @@
     <ClCompile Include="meta\meta_ext.c">
       <Filter>c\meta</Filter>
     </ClCompile>
+    <ClCompile Include="meta\meta_track.c">
+      <Filter>c\meta</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
