@@ -73,6 +73,9 @@
     <Filter Include="c\meta">
       <UniqueIdentifier>{f918aca5-5df7-428f-8e75-d86f8a607a00}</UniqueIdentifier>
     </Filter>
+    <Filter Include="c\schema">
+      <UniqueIdentifier>{cd7c6e5b-f982-4345-a563-15b543765979}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
@@ -528,6 +531,18 @@
     <ClCompile Include="meta\meta_ckpt.c">
       <Filter>c\meta</Filter>
     </ClCompile>
+    <ClCompile Include="schema\schema_create.c">
+      <Filter>c\schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\schema_list.c">
+      <Filter>c\schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\schema_util.c">
+      <Filter>c\schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\schema_drop.c">
+      <Filter>c\schema</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
@@ -630,6 +645,9 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\api.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\schema.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

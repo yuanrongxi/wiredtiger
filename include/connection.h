@@ -98,6 +98,13 @@ struct __wt_named_compressor
 	TAILQ_ENTRY(__wt_named_data_source)		q;
 };
 
+struct __wt_named_data_source {
+	const char *prefix;		/* Name of data source */
+	WT_DATA_SOURCE *dsrc;		/* User supplied callbacks */
+	TAILQ_ENTRY(__wt_named_data_source) q;
+};
+
+
 struct __wt_named_exractor
 {
 	const char*			name;

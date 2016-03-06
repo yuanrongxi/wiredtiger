@@ -205,6 +205,10 @@
     <ClCompile Include="posix\os_yield.c" />
     <ClCompile Include="reconcile\rec_track.c" />
     <ClCompile Include="reconcile\rec_write.c" />
+    <ClCompile Include="schema\schema_create.c" />
+    <ClCompile Include="schema\schema_drop.c" />
+    <ClCompile Include="schema\schema_list.c" />
+    <ClCompile Include="schema\schema_util.c" />
     <ClCompile Include="support\cksum.c" />
     <ClCompile Include="support\err.c" />
     <ClCompile Include="support\filename.c" />
@@ -252,6 +256,7 @@
     <ClInclude Include="include\os.h" />
     <ClInclude Include="include\posix.h" />
     <ClInclude Include="include\queue.h" />
+    <ClInclude Include="include\schema.h" />
     <ClInclude Include="include\session.h" />
     <ClInclude Include="include\stat.h" />
     <ClInclude Include="include\txn.h" />
