@@ -543,6 +543,9 @@
     <ClCompile Include="schema\schema_drop.c">
       <Filter>c\schema</Filter>
     </ClCompile>
+    <ClCompile Include="schema\schema_rename.c">
+      <Filter>c\schema</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
