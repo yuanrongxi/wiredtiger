@@ -209,6 +209,7 @@
     <ClCompile Include="schema\schema_drop.c" />
     <ClCompile Include="schema\schema_list.c" />
     <ClCompile Include="schema\schema_rename.c" />
+    <ClCompile Include="schema\schema_truncate.c" />
     <ClCompile Include="schema\schema_util.c" />
     <ClCompile Include="support\cksum.c" />
     <ClCompile Include="support\err.c" />
