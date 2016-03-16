@@ -549,6 +549,9 @@
     <ClCompile Include="schema\schema_truncate.c">
       <Filter>c\schema</Filter>
     </ClCompile>
+    <ClCompile Include="schema\schema_open.c">
+      <Filter>c\schema</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

@@ -208,6 +208,7 @@
     <ClCompile Include="schema\schema_create.c" />
     <ClCompile Include="schema\schema_drop.c" />
     <ClCompile Include="schema\schema_list.c" />
+    <ClCompile Include="schema\schema_open.c" />
     <ClCompile Include="schema\schema_rename.c" />
     <ClCompile Include="schema\schema_truncate.c" />
     <ClCompile Include="schema\schema_util.c" />
