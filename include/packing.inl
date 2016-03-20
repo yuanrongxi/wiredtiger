@@ -15,7 +15,7 @@ typedef struct
 } WT_PACK_VALUE;
 
 /*初始化WT_PACK_VAULE这个结构*/
-#define WT_PACK_VALUE_INIT					{{0}, 0, 0, 0};
+#define WT_PACK_VALUE_INIT					{{0}, 0, 0, 0}
 /*定义一个pv变量，并将其成员初始化为0*/
 #define WT_DECL_PACK_VALUE(pv)				WT_PACK_VALUE pv =  WT_PACK_VALUE_INIT
 

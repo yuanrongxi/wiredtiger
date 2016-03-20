@@ -291,8 +291,7 @@ static int __config_next(WT_CONFIG* conf, WT_CONFIG_ITEM* key, WT_CONFIG_ITEM *v
 				 * values.
 				 */
 				if (out == value && *conf->cur != ':')
-					return (__config_err(conf,
-					    "Value already complete", EINVAL));
+					return (__config_err(conf, "Value already complete", EINVAL));
 				out = value;
 			}
 			break;

@@ -552,6 +552,18 @@
     <ClCompile Include="schema\schema_open.c">
       <Filter>c\schema</Filter>
     </ClCompile>
+    <ClCompile Include="schema\schema_plan.c">
+      <Filter>c\meta</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\schema_project.c">
+      <Filter>c\meta</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\schema_stat.c">
+      <Filter>c\meta</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\schema_worker.c">
+      <Filter>c\meta</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
