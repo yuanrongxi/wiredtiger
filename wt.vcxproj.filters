@@ -564,6 +564,9 @@
     <ClCompile Include="schema\schema_worker.c">
       <Filter>c\meta</Filter>
     </ClCompile>
+    <ClCompile Include="lsm\lsm_cursor.c">
+      <Filter>c\lsm</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

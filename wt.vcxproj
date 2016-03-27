@@ -158,6 +158,7 @@
     <ClCompile Include="log\log.c" />
     <ClCompile Include="log\log_auto.c" />
     <ClCompile Include="log\log_slot.c" />
+    <ClCompile Include="lsm\lsm_cursor.c" />
     <ClCompile Include="lsm\lsm_manager.c" />
     <ClCompile Include="lsm\lsm_merge.c" />
     <ClCompile Include="lsm\lsm_meta.c" />
