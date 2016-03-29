@@ -3,7 +3,7 @@
 ***************************************************************************/
 
 /*初始化cursor 对象n*/
-#define	WT_CURSOR_STATIC_INIT(n,		\
+#define	WT_CURSOR_STATIC_INIT(n,					\
 	get_key,							\
 	get_value,							\
 	set_key,							\
@@ -14,17 +14,17 @@
 	prev,								\
 	reset,								\
 	search,								\
-	search_near,						\
+	search_near,							\
 	insert,								\
 	update,								\
 	remove,								\
-	reconfigure,						\
+	reconfigure,							\
 	close)								\
 	static const WT_CURSOR n = {					\
-	NULL,								/* session */			\
-	NULL,								/* uri */			\
-	NULL,								/* key_format */		\
-	NULL,								/* value_format */		\
+	NULL,				/* session */			\
+	NULL,				/* uri */			\
+	NULL,				/* key_format */		\
+	NULL,				/* value_format */		\
 	(int (*)(WT_CURSOR *, ...))(get_key),				\
 	(int (*)(WT_CURSOR *, ...))(get_value),				\
 	(void (*)(WT_CURSOR *, ...))(set_key),				\
@@ -41,16 +41,16 @@
 	remove,								\
 	close,								\
 	(int (*)(WT_CURSOR *, const char *))(reconfigure),		\
-	{ NULL, NULL },					/* TAILQ_ENTRY q */		\
-	0,								/* recno key */			\
-	{ 0 },							/* recno raw buffer */	\
-	NULL,							/* json_private */		\
-	NULL,							/* lang_private */		\
-	{ NULL, 0, 0, NULL, 0 },		/* WT_ITEM key */		\
-	{ NULL, 0, 0, NULL, 0 },		/* WT_ITEM value */		\
-	0,								/* int saved_err */		\
-	NULL,							/* internal_uri */		\
-	0								/* uint32_t flags */	\
+		{ NULL, NULL },			/* TAILQ_ENTRY q */		\
+	0,				/* recno key */			\
+		{ 0 },				/* recno raw buffer */		\
+	NULL,				/* json_private */		\
+	NULL,				/* lang_private */		\
+		{ NULL, 0, 0, NULL, 0 },	/* WT_ITEM key */		\
+		{ NULL, 0, 0, NULL, 0 },	/* WT_ITEM value */		\
+	0,				/* int saved_err */		\
+	NULL,				/* internal_uri */		\
+	0				/* uint32_t flags */		\
 }
 
 #define	WT_CBT_ACTIVE			0x01	/* Active in the tree */

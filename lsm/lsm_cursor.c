@@ -202,7 +202,6 @@ static void __clsm_leave(WT_CURSOR_LSM* clsm)
 		__cursor_leave(session);
 		F_CLR(clsm, WT_CLSM_ACTIVE);
 	}
-
 }
 
 /*
@@ -888,7 +887,7 @@ err:
 }
 
 /*LSM tree的cursor search方法实现*/
-statc int __clsm_search(WT_CURSOR* cursor)
+static int __clsm_search(WT_CURSOR* cursor)
 {
 	WT_CURSOR_LSM *clsm;
 	WT_DECL_RET;
@@ -1149,6 +1148,35 @@ err:
 	return (ret);
 }
 
+/*关闭一个lsm cursor对象*/
+static int __clsm_close(WT_CURSOR* cursor)
+{
+	WT_CURSOR_LSM* clsm;
+	WT_DECL_RET;
+	WT_SESSION_IMPL* session;
+
+	clsm = (WT_CURSOR_LSM*)cursor;
+	CURSOR_API_CALL(cursor, session, close, NULL);
+
+	WT_TRET(__clsm_close_cursors(clsm, 0, clsm->nchunks));
+	__wt_free(session, clsm->blooms);
+	__wt_free(session, clsm->cursors);
+	__wt_free(session, clsm->switch_txn);
+
+	/*结束cursor操作*/
+	__clsm_leave(clsm);
+
+	/*关闭lsm treed对象*/
+	cursor->uri = NULL;
+	if (clsm->lsm_tree != NULL)
+		__wt_lsm_tree_release(session, clsm->lsm_tree);
+
+	WT_TRET(__wt_cursor_close(cursor));
+
+err:
+	API_END_RET(session, ret);
+}
+
 /*
  * __wt_clsm_open --
  *	WT_SESSION->open_cursor method for LSM cursors.
@@ -1190,8 +1218,7 @@ int __wt_clsm_open(WT_SESSION_IMPL *session,
 		WT_RET_MSG(session, EINVAL, "LSM does not support opening by checkpoint");
 
 	/* Get the LSM tree. */
-	WT_WITH_DHANDLE_LOCK(session,
-	    ret = __wt_lsm_tree_get(session, uri, 0, &lsm_tree));
+	WT_WITH_DHANDLE_LOCK(session, ret = __wt_lsm_tree_get(session, uri, 0, &lsm_tree));
 	WT_RET(ret);
 
 	WT_ERR(__wt_calloc_one(session, &clsm));
