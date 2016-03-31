@@ -567,6 +567,9 @@
     <ClCompile Include="lsm\lsm_cursor.c">
       <Filter>c\lsm</Filter>
     </ClCompile>
+    <ClCompile Include="cursor\cur_file.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
