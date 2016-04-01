@@ -148,6 +148,7 @@
     <ClCompile Include="cursor\cur_bulk.c" />
     <ClCompile Include="cursor\cur_config.c" />
     <ClCompile Include="cursor\cur_ds.c" />
+    <ClCompile Include="cursor\cur_dump.c" />
     <ClCompile Include="cursor\cur_file.c" />
     <ClCompile Include="cursor\cur_json.c" />
     <ClCompile Include="cursor\cur_log.c" />
