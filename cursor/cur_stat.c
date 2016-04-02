@@ -157,8 +157,7 @@ __curstat_set_key(WT_CURSOR *cursor, ...)
 	va_start(ap, cursor);
 	if (F_ISSET(cursor, WT_CURSTD_RAW)) {
 		item = va_arg(ap, WT_ITEM *);
-		ret = __wt_struct_unpack(session, item->data, item->size,
-		    cursor->key_format, &cst->key);
+		ret = __wt_struct_unpack(session, item->data, item->size, cursor->key_format, &cst->key);
 	} else
 		cst->key = va_arg(ap, int);
 	va_end(ap);
@@ -166,7 +165,8 @@ __curstat_set_key(WT_CURSOR *cursor, ...)
 	if ((cursor->saved_err = ret) == 0)
 		F_SET(cursor, WT_CURSTD_KEY_EXT);
 
-err:	API_END(session, ret);
+err:	
+	API_END(session, ret);
 }
 
 /*
@@ -233,8 +233,7 @@ static int __curstat_prev(WT_CURSOR *cursor)
 
 	/* Initialize on demand. */
 	if (cst->notinitialized) {
-		WT_ERR(__wt_curstat_init(
-		    session, cursor->internal_uri, cst->cfg, cst));
+		WT_ERR(__wt_curstat_init(session, cursor->internal_uri, cst->cfg, cst));
 		cst->notinitialized = 0;
 	}
 
@@ -364,8 +363,7 @@ static void __curstat_conn_init(WT_SESSION_IMPL *session, WT_CURSOR_STAT *cst)
  * __curstat_file_init --
  *	Initialize the statistics for a file.
  */
-static int __curstat_file_init(WT_SESSION_IMPL *session,
-    const char *uri, const char *cfg[], WT_CURSOR_STAT *cst)
+static int __curstat_file_init(WT_SESSION_IMPL *session, const char *uri, const char *cfg[], WT_CURSOR_STAT *cst)
 {
 	WT_DATA_HANDLE *dhandle;
 	WT_DECL_RET;

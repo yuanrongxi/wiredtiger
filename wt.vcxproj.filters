@@ -552,18 +552,6 @@
     <ClCompile Include="schema\schema_open.c">
       <Filter>c\schema</Filter>
     </ClCompile>
-    <ClCompile Include="schema\schema_plan.c">
-      <Filter>c\meta</Filter>
-    </ClCompile>
-    <ClCompile Include="schema\schema_project.c">
-      <Filter>c\meta</Filter>
-    </ClCompile>
-    <ClCompile Include="schema\schema_stat.c">
-      <Filter>c\meta</Filter>
-    </ClCompile>
-    <ClCompile Include="schema\schema_worker.c">
-      <Filter>c\meta</Filter>
-    </ClCompile>
     <ClCompile Include="lsm\lsm_cursor.c">
       <Filter>c\lsm</Filter>
     </ClCompile>
@@ -571,6 +559,24 @@
       <Filter>c\cursor</Filter>
     </ClCompile>
     <ClCompile Include="cursor\cur_dump.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
+    <ClCompile Include="cursor\cur_metadata.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\schema_plan.c">
+      <Filter>c\schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\schema_project.c">
+      <Filter>c\schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\schema_stat.c">
+      <Filter>c\schema</Filter>
+    </ClCompile>
+    <ClCompile Include="schema\schema_worker.c">
+      <Filter>c\schema</Filter>
+    </ClCompile>
+    <ClCompile Include="cursor\cur_index.c">
       <Filter>c\cursor</Filter>
     </ClCompile>
   </ItemGroup>

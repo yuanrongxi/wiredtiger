@@ -150,8 +150,10 @@
     <ClCompile Include="cursor\cur_ds.c" />
     <ClCompile Include="cursor\cur_dump.c" />
     <ClCompile Include="cursor\cur_file.c" />
+    <ClCompile Include="cursor\cur_index.c" />
     <ClCompile Include="cursor\cur_json.c" />
     <ClCompile Include="cursor\cur_log.c" />
+    <ClCompile Include="cursor\cur_metadata.c" />
     <ClCompile Include="cursor\cur_stat.c" />
     <ClCompile Include="cursor\cur_std.c" />
     <ClCompile Include="evict\evict_file.c" />
