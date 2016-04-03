@@ -145,6 +145,7 @@
     <ClCompile Include="config\config_upgrade.c" />
     <ClCompile Include="conn\api_version.c" />
     <ClCompile Include="conn\conn_log.c" />
+    <ClCompile Include="cursor\cur_backup.c" />
     <ClCompile Include="cursor\cur_bulk.c" />
     <ClCompile Include="cursor\cur_config.c" />
     <ClCompile Include="cursor\cur_ds.c" />

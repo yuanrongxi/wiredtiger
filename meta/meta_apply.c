@@ -1,7 +1,7 @@
 
 #include "wt_internal.h"
 
-/*将func函数操作应用到meta file的所有btree树的session上*/
+/*将func函数操作应用到meta file的所有btree树用session执行*/
 int __wt_meta_btree_apply(WT_SESSION_IMPL* session, int (*func)(WT_SESSION_IMPL *, const char *[]), const char *cfg[])
 {
 	WT_CURSOR *cursor;
