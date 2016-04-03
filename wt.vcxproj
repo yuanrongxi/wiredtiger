@@ -156,6 +156,7 @@
     <ClCompile Include="cursor\cur_metadata.c" />
     <ClCompile Include="cursor\cur_stat.c" />
     <ClCompile Include="cursor\cur_std.c" />
+    <ClCompile Include="cursor\cur_table.c" />
     <ClCompile Include="evict\evict_file.c" />
     <ClCompile Include="evict\evict_lru.c" />
     <ClCompile Include="evict\evict_page.c" />

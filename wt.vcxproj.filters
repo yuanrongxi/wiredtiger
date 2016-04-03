@@ -579,6 +579,9 @@
     <ClCompile Include="cursor\cur_index.c">
       <Filter>c\cursor</Filter>
     </ClCompile>
+    <ClCompile Include="cursor\cur_table.c">
+      <Filter>c\cursor</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
