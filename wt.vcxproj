@@ -143,6 +143,7 @@
     <ClCompile Include="config\config_def.c" />
     <ClCompile Include="config\config_ext.c" />
     <ClCompile Include="config\config_upgrade.c" />
+    <ClCompile Include="conn\api_strerror.c" />
     <ClCompile Include="conn\api_version.c" />
     <ClCompile Include="conn\conn_log.c" />
     <ClCompile Include="cursor\cur_backup.c" />
