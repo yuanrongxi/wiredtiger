@@ -258,9 +258,9 @@ struct type **le_prev;	/* address of previous next element */	\
 #define	LIST_FIRST(head)	((head)->lh_first)
 
 #define	LIST_FOREACH(var, head, field)					\
-	for ((var) = LIST_FIRST((head));					\
+	for ((var) = SLIST_FIRST((head));					\
 	(var);												\
-	(var) = LIST_NEXT((var), field))
+	(var) = SLIST_NEXT((var), field))
 
 #define	LIST_INIT(head) do {							\
 	LIST_FIRST((head)) = NULL;							\

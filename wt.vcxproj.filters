@@ -588,6 +588,18 @@
     <ClCompile Include="conn\api_strerror.c">
       <Filter>c\conn</Filter>
     </ClCompile>
+    <ClCompile Include="conn\conn_sweep.c">
+      <Filter>c\conn</Filter>
+    </ClCompile>
+    <ClCompile Include="conn\conn_stat.c">
+      <Filter>c\conn</Filter>
+    </ClCompile>
+    <ClCompile Include="conn\conn_handle.c">
+      <Filter>c\conn</Filter>
+    </ClCompile>
+    <ClCompile Include="conn\conn_cache.c">
+      <Filter>c\conn</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">
