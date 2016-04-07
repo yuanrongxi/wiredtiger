@@ -600,6 +600,12 @@
     <ClCompile Include="conn\conn_cache.c">
       <Filter>c\conn</Filter>
     </ClCompile>
+    <ClCompile Include="conn\conn_cache_pool.c">
+      <Filter>c\conn</Filter>
+    </ClCompile>
+    <ClCompile Include="conn\conn_ckpt.c">
+      <Filter>c\conn</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

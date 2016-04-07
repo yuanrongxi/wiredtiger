@@ -65,7 +65,7 @@ int __wt_cache_config(WT_SESSION_IMPL *session, int reconfigure, const char *cfg
 	/* Cleanup if reconfiguring */
 	if (reconfigure && was_shared && !now_shared)
 		/* Remove ourselves from the pool if necessary */
-		WT_RET(__wt_conn_cache_pool_destroy(session));
+		WT_RET(__wt_conn_cache_pool_destroy(session)); /*如果原来是cache pool管理connection cache,现在的配置设置成独立的cache管理，那么从cache pool中删除管理关系*/
 	else if (reconfigure && !was_shared && now_shared)
 		/*
 		* Cache size will now be managed by the cache pool - the
@@ -77,10 +77,10 @@ int __wt_cache_config(WT_SESSION_IMPL *session, int reconfigure, const char *cfg
 	/*配置connection的cache*/
 	WT_RET(__cache_config_local(session, now_shared, cfg));
 	if (now_shared) {
-		WT_RET(__wt_cache_pool_config(session, cfg));
+		WT_RET(__wt_cache_pool_config(session, cfg)); /*对cache pool的配置更新*/
 		WT_ASSERT(session, F_ISSET(conn, WT_CONN_CACHE_POOL));
 		if (!was_shared)
-			WT_RET(__wt_conn_cache_pool_open(session));
+			WT_RET(__wt_conn_cache_pool_open(session)); /*将connection cache加入到cache pool当中进行管理*/
 	}
 
 	return 0;

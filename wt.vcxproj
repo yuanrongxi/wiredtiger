@@ -146,6 +146,8 @@
     <ClCompile Include="conn\api_strerror.c" />
     <ClCompile Include="conn\api_version.c" />
     <ClCompile Include="conn\conn_cache.c" />
+    <ClCompile Include="conn\conn_cache_pool.c" />
+    <ClCompile Include="conn\conn_ckpt.c" />
     <ClCompile Include="conn\conn_handle.c" />
     <ClCompile Include="conn\conn_log.c" />
     <ClCompile Include="conn\conn_stat.c" />
