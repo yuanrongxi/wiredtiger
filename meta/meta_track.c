@@ -176,6 +176,34 @@ int __wt_meta_track_off(WT_SESSION_IMPL* session, int need_sync, int unroll)
 	return ret;
 }
 
+int __wt_meta_track_sub_on(WT_SESSION_IMPL *session)
+{
+	WT_ASSERT(session, session->meta_track_sub == NULL);
+	session->meta_track_sub = session->meta_track_next;
+	return (0);
+}
+
+int __wt_meta_track_sub_off(WT_SESSION_IMPL *session)
+{
+	WT_DECL_RET;
+	WT_META_TRACK *trk, *trk_orig;
+
+	if (!WT_META_TRACKING(session) || session->meta_track_sub == NULL)
+		return (0);
+
+	trk_orig = session->meta_track_sub;
+	trk = session->meta_track_next;
+
+	/* Turn off tracking for unroll. */
+	session->meta_track_next = session->meta_track_sub = NULL;
+
+	while (--trk >= trk_orig)
+		WT_TRET(__meta_track_apply(session, trk, 0));
+
+	session->meta_track_next = trk_orig;
+	return (ret);
+}
+
 /*
 * __wt_meta_track_checkpoint --
 *	Track a handle involved in a checkpoint.
