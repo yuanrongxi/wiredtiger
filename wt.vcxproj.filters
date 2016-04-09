@@ -618,6 +618,9 @@
     <ClCompile Include="session\session_compact.c">
       <Filter>c\session</Filter>
     </ClCompile>
+    <ClCompile Include="conn\conn_open.c">
+      <Filter>c\conn</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

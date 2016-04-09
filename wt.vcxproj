@@ -151,6 +151,7 @@
     <ClCompile Include="conn\conn_dhandle.c" />
     <ClCompile Include="conn\conn_handle.c" />
     <ClCompile Include="conn\conn_log.c" />
+    <ClCompile Include="conn\conn_open.c" />
     <ClCompile Include="conn\conn_stat.c" />
     <ClCompile Include="conn\conn_sweep.c" />
     <ClCompile Include="cursor\cur_backup.c" />
