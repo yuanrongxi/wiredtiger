@@ -96,7 +96,7 @@ static int __sweep(WT_SESSION_IMPL* session)
 			continue;
 		WT_RET(ret);
 
-		/* Only sweep clean trees where all updates are visible. */
+		/* Only sweep clean trees where all updates are visible.*/
 		btree = dhandle->handle;
 		if (btree->modified || !__wt_txn_visible_all(session, btree->rec_max_txn))
 			goto unlock;
