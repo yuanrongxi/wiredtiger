@@ -234,6 +234,7 @@
     <ClCompile Include="schema\schema_worker.c" />
     <ClCompile Include="session\session_compact.c" />
     <ClCompile Include="session\session_salvage.c" />
+    <ClCompile Include="session_dhandle.c" />
     <ClCompile Include="support\cksum.c" />
     <ClCompile Include="support\err.c" />
     <ClCompile Include="support\filename.c" />
