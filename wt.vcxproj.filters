@@ -624,6 +624,9 @@
     <ClCompile Include="session_dhandle.c">
       <Filter>c\session</Filter>
     </ClCompile>
+    <ClCompile Include="session\session_api.c">
+      <Filter>c\session</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

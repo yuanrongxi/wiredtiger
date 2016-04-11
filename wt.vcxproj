@@ -232,6 +232,7 @@
     <ClCompile Include="schema\schema_truncate.c" />
     <ClCompile Include="schema\schema_util.c" />
     <ClCompile Include="schema\schema_worker.c" />
+    <ClCompile Include="session\session_api.c" />
     <ClCompile Include="session\session_compact.c" />
     <ClCompile Include="session\session_salvage.c" />
     <ClCompile Include="session_dhandle.c" />
