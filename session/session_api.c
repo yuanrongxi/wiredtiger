@@ -797,7 +797,7 @@ int __wt_open_internal_session(WT_CONNECTION_IMPL* conn, const char* name, int u
 }
 
 /*创建并打开一个外部使用的session对象*/
-int __wt_open_session(WT_CONNECTION_IMPL* conn, WT_EVENT_HANDLER* event_handler, const char* config, WT_SESSION_IMPL* sessionp)
+int __wt_open_session(WT_CONNECTION_IMPL* conn, WT_EVENT_HANDLER* event_handler, const char* config, WT_SESSION_IMPL** sessionp)
 {
 	static const WT_SESSION stds = {
 		NULL,
