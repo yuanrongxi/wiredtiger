@@ -573,7 +573,7 @@ err:	API_END_RET_NOTFOUND_MAP(session, ret);
 }
 
 /*发起一个异步返回的数据库操作事务*/
-static int __conn_async_new_op(WT_CONNECTION* wt_conn, const char* uri, const char* uri, const char* config, WT_ASYNC_CALLBACK* callback, WT_ASYNC_OP** asyncopp)
+static int __conn_async_new_op(WT_CONNECTION* wt_conn, const char* uri, const char* config, WT_ASYNC_CALLBACK* callback, WT_ASYNC_OP** asyncopp)
 {
 	WT_ASYNC_OP_IMPL* op;
 	WT_CONNECTION_IMPL* conn;
