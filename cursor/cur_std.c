@@ -544,7 +544,7 @@ int __wt_cursor_init(WT_CURSOR *cursor, const char *uri, WT_CURSOR *owner, const
 		TAILQ_INSERT_AFTER(&session->cursors, owner, cursor, q);
 	} 
 	else
-		TAILQ_INSERT_HEAD(&session->cursors, cursor, q);
+		TAILQ_INSERT_HEAD(&session->cursors, cursor, q); /*将打开的cursor与session做关联*/
 
 	/*设置cursor为open状态*/
 	F_SET(cursor, WT_CURSTD_OPEN);

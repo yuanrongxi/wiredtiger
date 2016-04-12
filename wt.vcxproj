@@ -145,6 +145,7 @@
     <ClCompile Include="config\config_upgrade.c" />
     <ClCompile Include="conn\api_strerror.c" />
     <ClCompile Include="conn\api_version.c" />
+    <ClCompile Include="conn\conn_api.c" />
     <ClCompile Include="conn\conn_cache.c" />
     <ClCompile Include="conn\conn_cache_pool.c" />
     <ClCompile Include="conn\conn_ckpt.c" />
@@ -239,6 +240,7 @@
     <ClCompile Include="support\cksum.c" />
     <ClCompile Include="support\err.c" />
     <ClCompile Include="support\filename.c" />
+    <ClCompile Include="support\global.c" />
     <ClCompile Include="support\hash_city.c" />
     <ClCompile Include="support\hash_fnv.c" />
     <ClCompile Include="support\hazard.c" />

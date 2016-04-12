@@ -93,9 +93,10 @@ struct __wt_named_collator
 
 struct __wt_named_compressor
 {
-	const char*			prefix;
-	WT_DATA_SOURCE*		dsrc;
-	TAILQ_ENTRY(__wt_named_data_source)		q;
+	const char *name;		/* Name of compressor */
+	WT_COMPRESSOR *compressor;	/* User supplied callbacks */
+	/* Linked list of compressors */
+	TAILQ_ENTRY(__wt_named_compressor) q;
 };
 
 struct __wt_named_data_source {
@@ -105,7 +106,7 @@ struct __wt_named_data_source {
 };
 
 
-struct __wt_named_exractor
+struct __wt_named_extractor
 {
 	const char*			name;
 	WT_EXTRACTOR*		extractor;

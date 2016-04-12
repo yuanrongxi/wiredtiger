@@ -220,8 +220,7 @@ int __wt_open_cursor(WT_SESSION_IMPL* session, const char* uri, WT_CURSOR* owner
 		break;
 	case 'b': /*backup cursor*/
 		if (WT_PREFIX_MATCH(uri, "backup:"))
-			WT_RET(__wt_curbackup_open(
-			session, uri, cfg, cursorp));
+			WT_RET(__wt_curbackup_open(session, uri, cfg, cursorp));
 		break;
 	case 's':/*stat cursor*/
 		if (WT_PREFIX_MATCH(uri, "statistics:"))
