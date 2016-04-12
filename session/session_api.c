@@ -179,7 +179,7 @@ int __wt_open_cursor(WT_SESSION_IMPL* session, const char* uri, WT_CURSOR* owner
 	switch (uri[0]){
 	case 't': /*table cursor*/
 		if (WT_PREFIX_MATCH(uri, "table"))
-			WT_RET(__WT_RET(__wt_curtable_open(session, uri, cfg, cursorp)));
+			WT_RET(__wt_curtable_open(session, uri, cfg, cursorp));
 		break;
 
 	case 'c': /*colgroup cursor*/
