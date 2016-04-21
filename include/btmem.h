@@ -176,16 +176,21 @@ struct __wt_page_modify {
 	 * disk.  This can be used to avoid trying to write the page multiple
 	 * times if a snapshot is keeping old versions pinned (e.g., in a
 	 * checkpoint).
+	 * 最近一次page reconile的事务ID,防止同一个事务多次写入一个page
 	 */
 	uint64_t disk_snap_min;
 
-	/* The largest transaction ID seen on the page by reconciliation. */
+	/* The largest transaction ID seen on the page by reconciliation. 
+	 * reconcile page的最大txnid,也就是说入盘的数据中对应的最大事务ID 
+	 */
 	uint64_t rec_max_txn;
 
 	/* The first unwritten transaction ID (approximate). */
 	uint64_t first_dirty_txn;
 
-	/* The largest update transaction ID (approximate). */
+	/* The largest update transaction ID (approximate). 
+	 * 修改数据中最大的事务ID
+	 */
 	uint64_t update_txn;
 
 	/* In-memory split transaction ID. */

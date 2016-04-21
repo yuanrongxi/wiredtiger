@@ -33,7 +33,7 @@
 *	file.
 */
 
-/*获得dhandle的read lock或者write lock，其中获得锁的过程是一个自旋过程*/
+/*获得dhandle的read lock或者write lock，其中获得锁的过程是一个自旋过程,这个锁只是为了打开或者关闭dhandle作用*/
 static int __conn_dhandle_open_lock(WT_SESSION_IMPL* session, WT_DATA_HANDLE* dhandle, uint32_t flags)
 {
 	WT_BTREE* btree;
@@ -229,7 +229,7 @@ static void __conn_btree_config_clear(WT_SESSION_IMPL* session)
 	__wt_free(session, dhandle->cfg);
 }
 
-/*设置session dhandle的配置信息*/
+/*设置session dhandle的配置信息,这个信息是通过uri查找meta table得到的*/
 static int __conn_btree_config_set(WT_SESSION_IMPL* session)
 {
 	WT_DATA_HANDLE* dhandle;

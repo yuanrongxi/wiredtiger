@@ -99,6 +99,23 @@ err:
 	API_END_RET(session, ret);
 }
 
+/*btree prev«∞œÚ*/
+static int __curfile_prev(WT_CURSOR* cursor)
+{
+	WT_CURSOR_BTREE *cbt;
+	WT_DECL_RET;
+	WT_SESSION_IMPL *session;
+
+	cbt = (WT_CURSOR_BTREE *)cursor;
+	CURSOR_API_CALL(cursor, session, prev, cbt->btree);
+
+	F_CLR(cursor, WT_CURSTD_KEY_SET | WT_CURSTD_VALUE_SET);
+	if ((ret = __wt_btcur_prev(cbt, 0)) == 0)
+		F_SET(cursor, WT_CURSTD_KEY_INT | WT_CURSTD_VALUE_INT);
+err:
+	API_END_RET(session, ret);
+}
+
 /*÷ÿ÷√btree cursor*/
 static int __curfile_reset(WT_CURSOR* cursor)
 {

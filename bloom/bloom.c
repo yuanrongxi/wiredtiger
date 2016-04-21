@@ -147,6 +147,7 @@ int __wt_bloom_insert(WT_BLOOM *bloom, WT_ITEM *key)
  * __wt_bloom_finalize --
  *	Writes the Bloom filter to stable storage. After calling finalize, only
  *	read operations can be performed on the bloom filter.
+ * 将bloom filter中的数据存入btree上，如果数据超过4G大小，会按4G大小分配存储
  */
 int __wt_bloom_finalize(WT_BLOOM *bloom)
 {

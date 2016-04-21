@@ -89,7 +89,7 @@ struct __wt_cell
 	 *第一个字节					cell类型描述
 	 *第二个字节					prefix compression count
 	 *第3 ~ 11个字节				associated 64-bit value	(uint64_t encoding, max 9 bytes)
-	 *第12 ~ 16个字节				数据长度
+	 *第12 ~ 16个字节				数据长度(5字节)
 	 */
 	uint8_t __chunk[1 + 1 + WT_INTPACK64_MAXSIZE + WT_INTPACK32_MAXSIZE];
 };
@@ -109,7 +109,7 @@ struct __wt_cell_unpack
 	uint8_t			ovfl;		/*cell是否溢出*/
 };
 
-/*遍历page上所有的cell,相当于磁盘链表遍历*/
+/*遍历page上所有的cell,主要是在entries中的cell,在update和append上的记录不会被遍历*/
 #define WT_CELL_FOREACH(btree, dsk, cell, unpack, i)		\
 	for ((cell) = WT_PAGE_HEADER_BYTE(btree, dsk), (i) = (dsk)->u.entries;	\
 	(i) > 0;						\
@@ -170,17 +170,36 @@ static inline int __wt_cell_pack_data_match(WT_CELL *page_cell, WT_CELL *val_cel
 	a = (uint8_t *)page_cell;
 	b = (uint8_t *)val_cell;
 
-	if(WT_CELL_SHORT_TYPE(a[0]) == WT_CELL_VALUE_SHORT){ /*value short类型*/
-		av = a[0] >> WT_CELL_SHORT_SHIFT; /*获得长度*/
+	if (WT_CELL_SHORT_TYPE(a[0]) == WT_CELL_VALUE_SHORT) {
+		av = a[0] >> WT_CELL_SHORT_SHIFT;
 		++a;
-	}
-	else if(WT_CELL_TYPE(a[0]) == WT_CELL_VALUE){
-		rle = a[0] & WT_CELL_64V ? 1 : 0;	/* 判断是否需要解析lre*/
+	} 
+	else if (WT_CELL_TYPE(a[0]) == WT_CELL_VALUE) {
+		rle = a[0] & WT_CELL_64V ? 1 : 0;	/* Skip any RLE */
 		++a;
 		if (rle)
-			WT_RET(__wt_vunpack_uint(&a, 0, &av)); /*解析lre*/
-		WT_RET(__wt_vunpack_uint(&a, 0, &av));	/*解析长度*/
-	}
+			WT_RET(__wt_vunpack_uint(&a, 0, &av));
+		WT_RET(__wt_vunpack_uint(&a, 0, &av));	/* Length */
+	} 
+	else
+		return 0;
+
+	if (WT_CELL_SHORT_TYPE(b[0]) == WT_CELL_VALUE_SHORT) {
+		bv = b[0] >> WT_CELL_SHORT_SHIFT;
+		++b;
+	} else if (WT_CELL_TYPE(b[0]) == WT_CELL_VALUE) {
+		rle = b[0] & WT_CELL_64V ? 1 : 0;	/* Skip any RLE */
+		++b;
+		if (rle)
+			WT_RET(__wt_vunpack_uint(&b, 0, &bv));
+		WT_RET(__wt_vunpack_uint(&b, 0, &bv));	/* Length */
+	} 
+	else
+		return 0;
+	
+	if (av == bv)
+		*matchp = memcmp(a, val_data, av) == 0 ? 1 : 0;
+	return 0;
 }
 
 /*pack一个copy data类型到cell中*/
@@ -343,7 +362,7 @@ static inline void __wt_cell_type_reset(WT_SESSION_IMPL* session, WT_CELL* cell,
 	cell->__chunk[0] = (cell->__chunk[0] & ~WT_CELL_TYPE_MASK) | WT_CELL_TYPE(new_type);
 }
 
-/*判断cell是否是行存储时page中的内容，如果不是返回NULL*/
+/*判断cell是否是行存储时page(在page的分配连续空间中)中的内容(value)，如果不是返回NULL*/
 static inline WT_CELL* __wt_cell_leaf_value_parse(WT_PAGE* page, WT_CELL* cell)
 {
 	if (cell >= (WT_CELL *)((uint8_t *)page->dsk + page->dsk->mem_size))
