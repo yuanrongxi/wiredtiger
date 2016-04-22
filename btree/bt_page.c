@@ -536,7 +536,7 @@ static int __inmem_row_leaf_entries(WT_SESSION_IMPL* session, const WT_PAGE_HEAD
 	return 0;
 }
 
-/*构建行存储leaf page的内存索引对象*/
+/*构建行存储leaf page的内存索引对象(row array)*/
 static int __inmem_row_leaf(WT_SESSION_IMPL* session, WT_PAGE* page)
 {
 	WT_BTREE *btree;
@@ -556,13 +556,13 @@ static int __inmem_row_leaf(WT_SESSION_IMPL* session, WT_PAGE* page)
 
 		switch(unpack->type){
 			case WT_CELL_KEY_OVFL:
-				__wt_row_leaf_key_set_cell(page, rip, cell);
+				__wt_row_leaf_key_set_cell(page, rip, cell); /*直接设置成CELL_FLAG方式访问*/
 				++rip;
 				break;
 
 			case WT_CELL_KEY:
 				if (!btree->huffman_key && unpack->prefix == 0)
-					__wt_row_leaf_key_set(page, rip, unpack);
+					__wt_row_leaf_key_set(page, rip, unpack); /*设置成K_FLAG方式访问*/
 				else
 					__wt_row_leaf_key_set_cell(page, rip, cell);
 				++rip;
@@ -570,7 +570,7 @@ static int __inmem_row_leaf(WT_SESSION_IMPL* session, WT_PAGE* page)
 
 			case WT_CELL_VALUE:
 				if (!btree->huffman_value)
-					__wt_row_leaf_value_set(page, rip - 1, unpack);
+					__wt_row_leaf_value_set(page, rip - 1, unpack); /*将K_CELL_FLAG设置成KV_CELL_FLAG*/
 				break;
 
 			case WT_CELL_VALUE_OVFL:

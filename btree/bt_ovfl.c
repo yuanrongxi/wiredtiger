@@ -5,7 +5,7 @@
 #include "wt_internal.h"
 
 /* 从磁盘中读取一个overflow item到内存中 */
-static int _ovfl_read(WT_SESSION_IMPL* session, const uint8_t* addr, size_t addr_size, WT_ITEM* store)
+static int __ovfl_read(WT_SESSION_IMPL* session, const uint8_t* addr, size_t addr_size, WT_ITEM* store)
 {
 	WT_BTREE* btree;
 	const WT_PAGE_HEADER* dsk;

@@ -274,6 +274,7 @@ static inline int __wt_off_page(WT_PAGE* page, const void* p)
 /*获取行存储时ref对应page中的内部key值*/
 static inline void __wt_ref_key(WT_PAGE *page, WT_REF *ref, void *keyp, size_t *sizep)
 {
+	uintptr_t v;
 	v = (uintptr_t)ref->key.ikey;
 	/*key的值与key.ikey内存关系是不连续的，keyp指向key值开始位置,通过v的值计算偏移*/
 	if (v & WT_IK_FLAG){
@@ -416,7 +417,7 @@ static inline void __wt_row_leaf_key_set_cell(WT_PAGE* page, WT_ROW* rip, WT_CEL
 	WT_ROW_KEY_SET(rip, v);
 }
 
-/*设置行存储是也只几点的reference k/v的值*/
+/*根据row K_	FLAG和unpack信息设置成row KV_FLAG信息*/
 static inline void __wt_row_leaf_value_set(WT_PAGE* page, WT_ROW* rip, WT_CELL_UNPACK* unpack)
 {
 	uintptr_t key_len, key_offset, value_offset, v;
@@ -760,7 +761,7 @@ static inline __wt_btree_lsm_size(WT_SESSION_IMPL* session, uint64_t maxsize)
 	if(!F_ISSET(btree, WT_BTREE_NO_EVICTION))
 		return 1;
 
-	/* 检查btree是否只有一个叶子节点 */
+	/* 检查btree是否只有一个叶子节点, LSM chunk只有一个leaf page,它不是完整意义上的BTREE */
 	WT_INTL_INDEX_GET(session, root, pindex);
 	if (pindex->entries != 1)		
 		return 1;

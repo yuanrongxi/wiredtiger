@@ -362,7 +362,7 @@ static inline void __wt_cell_type_reset(WT_SESSION_IMPL* session, WT_CELL* cell,
 	cell->__chunk[0] = (cell->__chunk[0] & ~WT_CELL_TYPE_MASK) | WT_CELL_TYPE(new_type);
 }
 
-/*判断cell是否是行存储时page(在page的分配连续空间中)中的内容(value)，如果不是返回NULL*/
+/*判断cell是否是page空间存储(在page的分配连续空间中)的内容(value)，如果不是返回NULL*/
 static inline WT_CELL* __wt_cell_leaf_value_parse(WT_PAGE* page, WT_CELL* cell)
 {
 	if (cell >= (WT_CELL *)((uint8_t *)page->dsk + page->dsk->mem_size))
@@ -381,6 +381,7 @@ static inline WT_CELL* __wt_cell_leaf_value_parse(WT_PAGE* page, WT_CELL* cell)
 	}
 }
 
+/*判断长度是否超出缓冲区*/
 #define	WT_CELL_LEN_CHK(p, len) do {						\
 	if (end != NULL && (((uint8_t *)p) + (len)) > end)		\
 	return (WT_ERROR);										\
@@ -408,6 +409,7 @@ restart:
 	unpack->type = __wt_cell_type(cell);
 	unpack->ovfl = 0;
 
+	/*根据cell type来确定data位置和长度*/
 	switch(unpack->raw){
 	case WT_CELL_KEY_SHORT_PFX:
 		WT_CELL_LEN_CHK(cell, 1);		/* skip prefix */

@@ -788,8 +788,8 @@ WT_PACKED_STRUCT_END;
  * not exist on the page, return a NULL.)
  */
 #define	WT_COL_PTR(page, cip)						\
-	((cip)->__col_value == 0 ?					\
-	    NULL : WT_PAGE_REF_OFFSET(page, (cip)->__col_value))
+	((cip)->__col_value == 0 ?	NULL : WT_PAGE_REF_OFFSET(page, (cip)->__col_value))
+
 #define	WT_COL_PTR_SET(cip, value)					\
 	(cip)->__col_value = (value)
 
