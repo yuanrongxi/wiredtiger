@@ -19,6 +19,7 @@ static int __block_buffer_to_addr(WT_BLOCK* block, const uint8_t **pp, wt_off_t*
 		*sizep = *cksump = 0;
 	}
 	else{
+		/*offset和size都是allocsize的整数倍，这样让磁盘写入更具亲和力*/
 		*offsetp = (wt_off_t)(o + 1) * block->allocsize;
 		*sizep = (uint32_t)s * block->allocsize;
 		*cksump = (uint32_t)c;
@@ -49,7 +50,7 @@ int __wt_block_addr_to_buffer(WT_BLOCK *block, uint8_t **pp, wt_off_t offset, ui
 	return 0;
 }
 
-/*从pp中读取block addr(size/checksum/offset)*/
+/*从pp中读取block addr(size/checksum/offset),从磁盘隐射缓冲区中解析block addr*/
 int __wt_block_buffer_to_addr(WT_BLOCK *block, const uint8_t *p, wt_off_t *offsetp, uint32_t *sizep, uint32_t *cksump)
 {
 	return (__block_buffer_to_addr(block, &p, offsetp, sizep, cksump));

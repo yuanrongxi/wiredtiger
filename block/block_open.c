@@ -93,7 +93,7 @@ void __wt_block_configure_first_fit(WT_BLOCK* block, int on)
 		(void)WT_ATOMIC_SUB4(block->allocfirst, 1);
 }
 
-/*为session创建并打开一个block对象*/
+/*为session创建并打开一个block manager对象,相当于打开一个btree文件*/
 int __wt_block_open(WT_SESSION_IMPL *session, const char *filename, const char *cfg[], int forced_salvage, 
 					int readonly, uint32_t allocsize, WT_BLOCK **blockp)
 {
@@ -156,7 +156,7 @@ int __wt_block_open(WT_SESSION_IMPL *session, const char *filename, const char *
 	/*初始化live_lock*/
 	WT_ERR(__wt_spin_init(session, &block->live_lock, "block manager"));
 
-	/*除Salvage操作外，都需要读取文件开始的描述信息到block中*/
+	/*除Salvage操作外，都需要读取文件开始的描述信息到block中,并校验文件描述信息*/
 	if (!forced_salvage)
 		WT_ERR(__desc_read(session, block));
 
@@ -183,7 +183,7 @@ int __wt_block_close(WT_SESSION_IMPL *session, WT_BLOCK *block)
 
 	conn = S2C(session);
 
-	WT_TRET(__wt_verbose(session, WT_VERB_BLOCK, "close: %s", block->name == NULL ? "" : block->name ));
+	WT_TRET(__wt_verbose(session, WT_VERB_BLOCK, "close: %s", block->name == NULL ? "" : block->name));
 
 	__wt_spin_lock(session, &conn->block_lock);
 
@@ -238,12 +238,8 @@ static int __desc_read(WT_SESSION_IMPL* session, WT_BLOCK* block)
 	desc = (WT_BLOCK_DESC *)(buf->mem);
 
 	WT_ERR(__wt_verbose(session, WT_VERB_BLOCK,
-		"%s: magic %" PRIu32
-		", major/minor: %" PRIu32 "/%" PRIu32
-		", checksum %#" PRIx32,
-		block->name, desc->magic,
-		desc->majorv, desc->minorv,
-		desc->cksum));
+		"%s: magic %" PRIu32 ", major/minor: %" PRIu32 "/%" PRIu32 ", checksum %#" PRIx32,
+		block->name, desc->magic, desc->majorv, desc->minorv, desc->cksum));
 
 	cksum = desc->cksum;
 	desc->cksum = 0;
@@ -255,10 +251,8 @@ static int __desc_read(WT_SESSION_IMPL* session, WT_BLOCK* block)
 	if (desc->majorv > WT_BLOCK_MAJOR_VERSION || (desc->majorv == WT_BLOCK_MAJOR_VERSION && desc->minorv > WT_BLOCK_MINOR_VERSION))
 		WT_ERR_MSG(session, WT_ERROR,
 		"unsupported WiredTiger file version: this build only "
-		"supports major/minor versions up to %d/%d, and the file "
-		"is version %d/%d",
-		WT_BLOCK_MAJOR_VERSION, WT_BLOCK_MINOR_VERSION,
-		desc->majorv, desc->minorv);
+		"supports major/minor versions up to %d/%d, and the file is version %d/%d",
+		WT_BLOCK_MAJOR_VERSION, WT_BLOCK_MINOR_VERSION, desc->majorv, desc->minorv);
 
 err:
 	__wt_scr_free(session, &buf);

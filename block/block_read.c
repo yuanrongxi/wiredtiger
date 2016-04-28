@@ -123,8 +123,7 @@ int __wt_block_read_off(WT_SESSION_IMPL* session, WT_BLOCK* block, WT_ITEM* buf,
 
 	/*blockÊý¾Ý±»ÆÆ»µ*/
 	if (!F_ISSET(session, WT_SESSION_SALVAGE_CORRUPT_OK))
-		__wt_errx(session, "read checksum error [%" PRIu32 "B @ %" PRIuMAX ", %"
-		PRIu32 " != %" PRIu32 "]", size, (uintmax_t)offset, cksum, page_cksum);
+		__wt_errx(session, "read checksum error [%" PRIu32 "B @ %" PRIuMAX ", %" PRIu32 " != %" PRIu32 "]", size, (uintmax_t)offset, cksum, page_cksum);
 
 	/* Panic if a checksum fails during an ordinary read. */
 	return (block->verify || F_ISSET(session, WT_SESSION_SALVAGE_CORRUPT_OK) ? WT_ERROR : __wt_illegal_value(session, block->name));

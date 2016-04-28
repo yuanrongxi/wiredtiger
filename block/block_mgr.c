@@ -49,7 +49,7 @@ static int __bm_checkpoint_load(WT_BM* bm, WT_SESSION_IMPL* session, const uint8
 
 	conn = S2C(session);
 
-	/*加入没有打开一个checkpoint，将直接将system有不活跃状态变成活跃状态*/
+	/*假如没有打开一个checkpoint，将直接将system由不活跃状态变成活跃状态*/
 	bm->is_live = !checkpoint;
 	WT_RET(__wt_block_checkpoint_load(session, bm->block, addr, addr_size, root_addr, root_addr_sizep, checkpoint));
 	if(checkpoint){
@@ -267,8 +267,7 @@ int __wt_block_manager_open(WT_SESSION_IMPL *session, const char *filename, cons
 	WT_RET(__wt_calloc_one(session, &bm));
 	__bm_method_set(bm, 0);
 
-	WT_ERR(__wt_block_open(session, filename, cfg,
-		forced_salvage, readonly, allocsize, &bm->block));
+	WT_ERR(__wt_block_open(session, filename, cfg, forced_salvage, readonly, allocsize, &bm->block));
 
 	*bmp = bm;
 	return (0);

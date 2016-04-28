@@ -7,7 +7,7 @@
 u_int __wt_block_header(WT_BLOCK* block)
 {
 	WT_UNUSED(block);
-
+	/*struct __wt_block_header的结构长度*/
 	return WT_BLOCK_HEADER_SIZE;
 }
 

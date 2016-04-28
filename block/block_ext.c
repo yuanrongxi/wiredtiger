@@ -706,9 +706,40 @@ static int __block_merge(WT_SESSION_IMPL* session, WT_EXTLIST* el, wt_off_t off,
 	if (before == NULL && after == NULL) {
 		WT_RET(__wt_verbose(session, WT_VERB_BLOCK, "%s: insert range %" PRIdMAX "-%" PRIdMAX,
 			el->name, (intmax_t)off, (intmax_t)(off + size)));
+
+		return __block_off_insert(session, el, off, size);
 	}
 
-	return __block_off_insert(session, el, off, size);
+	/*和after进行合并*/
+	if (before == NULL){
+		WT_RET(__block_off_remove(session, el, after->off, &ext));
+		WT_RET(__wt_verbose(session, WT_VERB_BLOCK,
+			"%s: range grows from %" PRIdMAX "-%" PRIdMAX ", to %" PRIdMAX "-%" PRIdMAX,
+			el->name, (intmax_t)ext->off, (intmax_t)(ext->off + ext->size),
+			(intmax_t)off, (intmax_t)(off + ext->size + size)));
+
+		ext->off = off;
+		ext->size += size;
+	}
+	else{ /*和before、after进行合并*/
+		if (after != NULL) { /*before、current和after是相连的，将三个EXT进行合并,这个if是合并after*/
+			size += after->size;
+			WT_RET(__block_off_remove(session, el, after->off, NULL));
+		}
+
+		/*合并before*/
+		WT_RET(__block_off_remove(session, el, before->off, &ext));
+
+		WT_RET(__wt_verbose(session, WT_VERB_BLOCK, "%s: range grows from %" PRIdMAX "-%" PRIdMAX ", to %"
+			PRIdMAX "-%" PRIdMAX, el->name,
+			(intmax_t)ext->off, (intmax_t)(ext->off + ext->size),
+			(intmax_t)ext->off,
+			(intmax_t)(ext->off + ext->size + size)));
+
+		ext->size += size;
+	}
+	/*将合并后的ext插入到ext skiplist中*/
+	return __block_ext_insert(session, el, ext);
 }
 
 /*读取block的avail ext对象到el中,根据el.off/el.size进行读取，但数据的长度不能超过ckpt_size*/
