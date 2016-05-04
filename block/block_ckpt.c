@@ -382,7 +382,7 @@ static int __ckpt_process(WT_SESSION_IMPL* session, WT_BLOCK* block, WT_CKPT* ck
 	}
 
 live_update:
-	/*根据avail的长度截短block文件*/
+	/*根据avail的最后的位置确定是否要截短block文件*/
 	WT_ERR(__wt_block_extlist_truncate(session, block, &ci->avail));
 
 	WT_CKPT_FOREACH(ckptbase, ckpt){

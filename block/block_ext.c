@@ -417,7 +417,7 @@ int __wt_block_off_free(WT_SESSION_IMPL *session, WT_BLOCK *block, wt_off_t offs
 	WT_DECL_RET;
 
 	/*进行范围释放，有可能是在某个WT_EXT范围之内*/
-	ret = __wt_block_off_remove_overlap(session, &block->live.alloc, offset, size)
+	ret = __wt_block_off_remove_overlap(session, &block->live.alloc, offset, size);
 	if (ret == 0) /*在alloc中有存在，表示是从avail中分配的，先合并到avail中，重复使用*/
 		ret = __block_merge(session, &block->live.avail, offset, (wt_off_t)size);
 	else if(ret == WT_NOTFOUND) /*在alloc中没有找到，直接合并到废弃的空间跳表中*/
@@ -909,7 +909,7 @@ int __wt_block_extlist_truncate(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_EX
 		return 0;
 
 	WT_ASSERT(session, ext->off + ext->size <= fh->size);
-	if (ext->off + ext->size < fh->size) /*如果ext所有的数据还没有充满文件，表示文件无需做truncate操作*/
+	if (ext->off + ext->size < fh->size) /*空闲的ext不处于文件末尾，表示文件无需做truncate操作*/
 		return 0;
 
 	orig = fh->size;

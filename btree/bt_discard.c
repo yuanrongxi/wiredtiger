@@ -255,6 +255,7 @@ static void __free_skip_array(WT_SESSION_IMPL* session, WT_INSERT_HEAD** head_ar
 /*·ÏÆúinsert list¶ÔÏó*/
 static void __free_skip_list(WT_SESSION_IMPL* session, WT_INSERT* ins)
 {
+	WT_INSERT *next;
 	for (; ins != NULL; ins = next) {
 		__free_update_list(session, ins->upd);
 		next = WT_SKIP_NEXT(ins);
