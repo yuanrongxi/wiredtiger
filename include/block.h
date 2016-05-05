@@ -14,7 +14,7 @@ struct __wt_extlist
 	wt_off_t				offset;					/*跳表在文件中的起始位置*/
 	uint32_t				cksum;					/*extlist数据的checksum*/
 	uint32_t				size;					/*extlist的size总和*/
-	int						track_size;				/*skip list维护的数据大小*/
+	int						track_size;				/*skip list维护的ext个数，如果read extlist block时是avail采用merge方式，如果是其他的，采用append方式*/
 
 	WT_EXT*					last;					/*off跳表中最后一个ext对象*/
 
@@ -22,7 +22,7 @@ struct __wt_extlist
 	WT_SIZE*				sz[WT_SKIP_MAXDEPTH];	/*size skip list的对象*/
 };
 
-/*跳表的单元定义*/
+/*ext跳表的单元定义*/
 struct __wt_ext
 {
 	wt_off_t				off;					/*extent的文件文件对应的偏移量*/

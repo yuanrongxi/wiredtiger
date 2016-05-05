@@ -849,7 +849,7 @@ int __wt_block_extlist_write(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_EXTLI
 	WT_RET(__wt_scr_alloc(session, size, &tmp));
 
 	/*ÉèÖÃÒ³Í·Î»ÖÃ*/
-	dsk = (WT_PAGE_HEADER)(tmp->mem);
+	dsk = (WT_PAGE_HEADER*)(tmp->mem);
 	memset(dsk, 0, WT_BLOCK_HEADER_BYTE_SIZE);
 	dsk->type = WT_PAGE_BLOCK_MANAGER;
 
