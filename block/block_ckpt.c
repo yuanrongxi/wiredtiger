@@ -142,7 +142,7 @@ int __wt_block_checkpoint(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_ITEM *bu
 
 	ci = &block->live;
 
-	/*将block设置成重新复用模式，也就是ext object在avail list中从头申请*/
+	/*将block设置成重新复用模式，也就是ext object在avail list中从头申请,这样做的目的是为了文件能空间尽量紧凑，可以进行compact*/
 	__wt_block_configure_first_fit(block, 1);
 
 	/*buf是空的，直接丢弃了root page信息？？*/
@@ -338,7 +338,7 @@ static int __ckpt_process(WT_SESSION_IMPL* session, WT_BLOCK* block, WT_CKPT* ck
 		 */
 		if (a->root_offset != WT_BLOCK_INVALID_OFFSET)
 			WT_ERR(__wt_block_insert_ext(session, &a->discard, a->root_offset, a->root_size));
-		/*将a中各个ext 对象全部放入block->live.avail中*/
+		/*将a中各个索引extlist 对象的ext放入block->live.avail中*/
 		WT_ERR(__ckpt_extlist_fblocks(session, block, &a->alloc));
 		WT_ERR(__ckpt_extlist_fblocks(session, block, &a->avail));
 		WT_ERR(__ckpt_extlist_fblocks(session, block, &a->discard));

@@ -16,7 +16,7 @@ static int __verify_last_truncate(WT_SESSION_IMPL *, WT_BLOCK *, WT_CKPT *);
 /*通过对齐下标，计算offset偏移位置*/
 #define	WT_FRAG_TO_OFF(block, frag)			(((wt_off_t)(frag + 1)) * (block)->allocsize)
 
-/*开一个对block的核实校验*/
+/*开始一个对block的核实校验*/
 int __wt_block_verify_start(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_CKPT *ckptbase)
 {
 	WT_CKPT *ckpt;
@@ -60,6 +60,7 @@ int __wt_block_verify_start(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_CKPT *
 	return 0;
 }
 
+/*校验最后一个checkpoint中的avail list是否是空闲的*/
 static int __verify_last_avail(WT_SESSION_IMPL* session, WT_BLOCK* block, WT_CKPT* ckpt)
 {
 	WT_BLOCK_CKPT *ci, _ci;
@@ -245,7 +246,7 @@ static int __verify_filefrag_add(WT_SESSION_IMPL *session, WT_BLOCK *block, cons
 				WT_RET_MSG(session, WT_ERROR, "file fragment at %" PRIuMAX " referenced multiple times", (uintmax_t)offset);
 	}
 
-	/*将ext（off,size）范围*/
+	/*将ext（off,size）范围设置为1*/
 	__bit_nset(block->fragfile, frag, frag + (frags - 1));
 
 	return 0;

@@ -44,10 +44,10 @@ struct __wt_ckpt
 	char*			name;				/*名称字符*/
 	WT_ITEM			addr;				/*检查点的addr二进制数据，分别打包了root_off/root_size/root_checksum*/
 	WT_ITEM			raw;				/*一个完整的checkpoint addr信息*/
-	int64_t			order;				/**/
+	int64_t			order;				/*checkpoint的序号，一直递增的,可以用这个ID来确定checkpoint之间的先后关系*/
 	uintmax_t		sec;				/*时间戳*/
 
-	uint64_t		ckpt_size;			/**/
+	uint64_t		ckpt_size;			/*checkpoint中的总数据空间大小*/
 	uint64_t		write_gen;			/**/
 
 	void*			bpriv;				/*一个WT_BLOCK_CKPT结构指针，连有详细的checkpiont信息*/
