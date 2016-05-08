@@ -105,6 +105,120 @@ static int __verify_tree_shape(WT_SESSION_IMPL* session, WT_VSTUFF* vs)
 	return 0;
 }
 
+int __wt_verify(WT_SESSION_IMPL* session, const char* cfg[])
+{
+	WT_BM *bm;
+	WT_BTREE *btree;
+	WT_CKPT *ckptbase, *ckpt;
+	WT_DECL_RET;
+	WT_VSTUFF *vs, _vstuff;
+	size_t root_addr_size;
+	uint8_t root_addr[WT_BTREE_MAX_ADDR_COOKIE];
+	int bm_start, quit;
+
+	btree = S2BT(session);
+	bm = btree->bm;
+	ckptbase = NULL;
+	bm_start = 0;
+
+	WT_CLEAR(_vstuff);
+	vs = &_vstuff;
+
+	WT_ERR(__wt_scr_alloc(session, 0, &vs->max_key));
+	WT_ERR(__wt_scr_alloc(session, 0, &vs->max_addr));
+	WT_ERR(__wt_scr_alloc(session, 0, &vs->tmp1));
+	WT_ERR(__wt_scr_alloc(session, 0, &vs->tmp2));
+
+	WT_ERR(__verify_config(session, cfg, vs));
+
+	/* Optionally dump specific block offsets. */
+	WT_ERR(__verify_config_offsets(session, cfg, &quit));
+	if (quit)
+		goto done;
+
+		/* Get a list of the checkpoints for this file. */
+	WT_ERR(__wt_meta_ckptlist_get(session, btree->dhandle->name, &ckptbase));
+
+	/* Inform the underlying block manager we're verifying. */
+	WT_ERR(bm->verify_start(bm, session, ckptbase));
+	bm_start = 1;
+
+	/* Loop through the file's checkpoints, verifying each one. */
+	WT_CKPT_FOREACH(ckptbase, ckpt) {
+		WT_ERR(__wt_verbose(session, WT_VERB_VERIFY, "%s: checkpoint %s", btree->dhandle->name, ckpt->name));
+
+		/* Fake checkpoints require no work. */
+		if (F_ISSET(ckpt, WT_CKPT_FAKE))
+			continue;
+
+		/* House-keeping between checkpoints. */
+		__verify_checkpoint_reset(vs);
+
+		if (WT_VRFY_DUMP(vs))
+			WT_ERR(__wt_msg(session, "%s: checkpoint %s", btree->dhandle->name, ckpt->name));
+
+		/* Load the checkpoint. */
+		WT_ERR(bm->checkpoint_load(bm, session, ckpt->raw.data, ckpt->raw.size, root_addr, &root_addr_size, 1));
+
+		/*
+		 * Ignore trees with no root page.
+		 * Verify, then discard the checkpoint from the cache.
+		 */
+		if (root_addr_size != 0 && (ret = __wt_btree_tree_open(session, root_addr, root_addr_size)) == 0) {
+			if (WT_VRFY_DUMP(vs))
+				WT_ERR(__wt_msg(session, "Root: %s %s",
+				    __wt_addr_string(session, root_addr, root_addr_size, vs->tmp1), __wt_page_type_string(btree->root.page->type)));
+
+			WT_WITH_PAGE_INDEX(session, ret = __verify_tree(session, &btree->root, vs));
+
+			WT_TRET(__wt_cache_op(session, NULL, WT_SYNC_DISCARD));
+		}
+
+		/* Unload the checkpoint. */
+		WT_TRET(bm->checkpoint_unload(bm, session));
+		WT_ERR(ret);
+
+		/* Display the tree shape. */
+		if (vs->dump_shape)
+			WT_ERR(__verify_tree_shape(session, vs));
+	}
+
+done:
+err:	/* Inform the underlying block manager we're done. */
+	if (bm_start)
+		WT_TRET(bm->verify_end(bm, session));
+
+	/* Discard the list of checkpoints. */
+	if (ckptbase != NULL)
+		__wt_meta_ckptlist_free(session, ckptbase);
+
+	/* Wrap up reporting. */
+	WT_TRET(__wt_progress(session, NULL, vs->fcnt));
+
+	/* Free allocated memory. */
+	__wt_scr_free(session, &vs->max_key);
+	__wt_scr_free(session, &vs->max_addr);
+	__wt_scr_free(session, &vs->tmp1);
+	__wt_scr_free(session, &vs->tmp2);
+
+	return (ret);
+}
+
+static void __verify_checkpoint_reset(WT_VSTUFF *vs)
+{
+	/*
+	 * Key order is per checkpoint, reset the data length that serves as a
+	 * flag value.
+	 */
+	vs->max_addr->size = 0;
+
+	/* Record total is per checkpoint, reset the record count. */
+	vs->record_total = 0;
+
+	/* Tree depth. */
+	vs->depth = 1;
+}
+
 /*进行btree的verify操作，通过逐层扫描来进行verify，主要是校验page和整个树的层次逻辑关系*/
 static int __verify_tree(WT_SESSION_IMPL* session, WT_REF* ref, WT_VSTUFF* vs)
 {
@@ -243,8 +357,7 @@ celltype_err:
 			WT_RET_MSG(session, WT_ERROR,
 						"page at %s, of type %s, is referenced in "
 						"its parent by a cell of type %s",
-						__wt_page_addr_string(
-						session, ref, vs->tmp1),
+						__wt_page_addr_string(session, ref, vs->tmp1),
 						__wt_page_type_string(page->type),
 						__wt_cell_type_string(unpack->raw));
 			break;
@@ -301,10 +414,8 @@ celltype_err:
 				    "%s is %" PRIu64 " and the expected "
 				    "starting record number is %" PRIu64,
 				    entry,
-				    __wt_page_addr_string(
-				    session, child_ref, vs->tmp1),
-				    child_ref->key.recno,
-				    vs->record_total + 1);
+				    __wt_page_addr_string(session, child_ref, vs->tmp1),
+				    child_ref->key.recno, vs->record_total + 1);
 			}
 
 			/* Verify the subtree. */

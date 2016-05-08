@@ -152,7 +152,7 @@ int __wt_verify_ckpt_load(WT_SESSION_IMPL *session, WT_BLOCK *block, WT_BLOCK_CK
 		/*将alloc中的ext对象读出*/
 		WT_RET(__wt_block_extlist_read(session, block, el, ci->file_size));
 		/*将el合并到verify_alloc中*/
-		WT_RET(__wt_block_extlist_merge( session, el, &block->verify_alloc));
+		WT_RET(__wt_block_extlist_merge(session, el, &block->verify_alloc));
 		__wt_block_extlist_free(session, el);
 	}
 
