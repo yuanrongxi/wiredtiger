@@ -461,10 +461,10 @@ struct __wt_page {
 			 * to avoid growing that structure.
 			 */
 			WT_INSERT_HEAD	**ins;	/* Inserts */
-			WT_UPDATE	**upd;	/* Updates */
+			WT_UPDATE	**upd;		/* Updates */
 
-			WT_ROW *d;		/* Key/value pairs */
-			uint32_t entries;	/* Entries */
+			WT_ROW *d;				/* Key/value pairs */
+			uint32_t entries;		/* Entries */
 		} row;
 #undef	pg_row_d
 #define	pg_row_d	u.row.d
@@ -472,7 +472,7 @@ struct __wt_page {
 #define	pg_row_ins	u.row.ins
 #undef	pg_row_upd
 #define	pg_row_upd	u.row.upd
-#define	pg_row_entries	u.row.entries
+#undef	pg_row_entries
 #define	pg_row_entries	u.row.entries
 
 		/* Fixed-length column-store leaf page. */
@@ -643,7 +643,7 @@ typedef enum __wt_page_state {
 	WT_REF_DISK=0,			/* Page is on disk */
 	WT_REF_DELETED,			/* Page is on disk, but deleted */
 	WT_REF_LOCKED,			/* Page locked for exclusive access */
-	WT_REF_MEM,			/* Page is in cache and valid */
+	WT_REF_MEM,				/* Page is in cache and valid */
 	WT_REF_READING,			/* Page being read */
 	WT_REF_SPLIT			/* Page was split */
 } WT_PAGE_STATE;
@@ -733,11 +733,11 @@ struct __wt_row {	/* On-page key, on-page cell, or off-page WT_IKEY */
  * WT_ROW_FOREACH --
  *	Walk the entries of an in-memory row-store leaf page.
  */
-#define	WT_ROW_FOREACH(page, rip, i)					\
-	for ((i) = (page)->pg_row_entries,				\
-	    (rip) = (page)->pg_row_d; (i) > 0; ++(rip), --(i))
-#define	WT_ROW_FOREACH_REVERSE(page, rip, i)				\
-	for ((i) = (page)->pg_row_entries,				\
+#define	WT_ROW_FOREACH(page, rip, i)								\
+	for ((i) = (page)->pg_row_entries, (rip) = (page)->pg_row_d; (i) > 0; ++(rip), --(i))
+
+#define	WT_ROW_FOREACH_REVERSE(page, rip, i)						\
+	for ((i) = (page)->pg_row_entries,								\
 	    (rip) = (page)->pg_row_d + ((page)->pg_row_entries - 1);	\
 	    (i) > 0; --(rip), --(i))
 
@@ -817,9 +817,6 @@ WT_PACKED_STRUCT_END;
  * structure.
  */
 
-#define	WT_IKEY_DATA(ikey)						\
-	((void *)((uint8_t *)(ikey) + sizeof(WT_IKEY)))
-
 struct __wt_ikey {
 	uint32_t size;			/* Key length */
 
@@ -836,6 +833,8 @@ struct __wt_ikey {
 	/* The key bytes immediately follow the WT_IKEY structure. */
 };
 
+#define	WT_IKEY_DATA(ikey)		((void *)((uint8_t *)(ikey) + sizeof(WT_IKEY)))
+
 /*
  * WT_UPDATE --
  * Entries on leaf pages can be updated, either modified or deleted.  Updates
@@ -849,6 +848,8 @@ struct __wt_ikey {
 WT_PACKED_STRUCT_BEGIN(__wt_update)
 	uint64_t txnid;			/* update transaction */
 	WT_UPDATE *next;		/* forward-linked list */
+	uint32_t size;			/* update length */
+	/*结构体后面紧接着value的缓冲区数据,长度为size*/
 };
 
 /*
@@ -857,21 +858,17 @@ WT_PACKED_STRUCT_BEGIN(__wt_update)
 * structure for a flag bit.
 */
 #define	WT_UPDATE_DELETED_ISSET(upd)	((upd)->size == UINT32_MAX)
-#define	WT_UPDATE_DELETED_SET(upd)	((upd)->size = UINT32_MAX)
-uint32_t size;			/* update length */
+#define	WT_UPDATE_DELETED_SET(upd)		((upd)->size = UINT32_MAX)
 
 /* The untyped value immediately follows the WT_UPDATE structure. */
-#define	WT_UPDATE_DATA(upd)						\
-	((void *)((uint8_t *)(upd) + sizeof(WT_UPDATE)))
+#define	WT_UPDATE_DATA(upd)				((void *)((uint8_t *)(upd) + sizeof(WT_UPDATE)))
 
 /*
 * The memory size of an update: include some padding because this is
 * such a common case that overhead of tiny allocations can swamp our
 * cache overhead calculation.
 */
-#define	WT_UPDATE_MEMSIZE(upd)						\
-	WT_ALIGN(sizeof(WT_UPDATE) +					\
-	    (WT_UPDATE_DELETED_ISSET(upd) ? 0 : (upd)->size), 32)
+#define	WT_UPDATE_MEMSIZE(upd)			WT_ALIGN(sizeof(WT_UPDATE) + (WT_UPDATE_DELETED_ISSET(upd) ? 0 : (upd)->size), 32)
 
 /*
  * WT_INSERT --
@@ -907,6 +904,7 @@ uint32_t size;			/* update length */
 struct __wt_insert {
 	WT_UPDATE *upd;				/* value */
 
+	/*key的表示方式*/
 	union {
 		uint64_t recno;			/* column-store record number */
 		struct {
@@ -915,39 +913,35 @@ struct __wt_insert {
 		} key;
 	} u;
 
-#define	WT_INSERT_KEY_SIZE(ins) (((WT_INSERT *)ins)->u.key.size)
-#define	WT_INSERT_KEY(ins)						\
-	((void *)((uint8_t *)(ins) + ((WT_INSERT *)ins)->u.key.offset))
-#define	WT_INSERT_RECNO(ins)	(((WT_INSERT *)ins)->u.recno)
-
 	WT_INSERT *next[0];			/* forward-linked skip list */
 };
+
+#define	WT_INSERT_KEY_SIZE(ins) (((WT_INSERT *)ins)->u.key.size)
+#define	WT_INSERT_KEY(ins)		((void *)((uint8_t *)(ins) + ((WT_INSERT *)ins)->u.key.offset))
+#define	WT_INSERT_RECNO(ins)	(((WT_INSERT *)ins)->u.recno)
 
 /*
  * Skiplist helper macros.
  */
-#define	WT_SKIP_FIRST(ins_head)						\
-	(((ins_head) == NULL) ? NULL : ((WT_INSERT_HEAD *)ins_head)->head[0])
-#define	WT_SKIP_LAST(ins_head)						\
-	(((ins_head) == NULL) ? NULL : ((WT_INSERT_HEAD *)ins_head)->tail[0])
-#define	WT_SKIP_NEXT(ins)  ((ins)->next[0])
-#define	WT_SKIP_FOREACH(ins, ins_head)					\
-	for ((ins) = WT_SKIP_FIRST(ins_head);				\
-	    (ins) != NULL;						\
-	    (ins) = WT_SKIP_NEXT(ins))
+#define	WT_SKIP_FIRST(ins_head)			(((ins_head) == NULL) ? NULL : ((WT_INSERT_HEAD *)ins_head)->head[0])
+
+#define	WT_SKIP_LAST(ins_head)			(((ins_head) == NULL) ? NULL : ((WT_INSERT_HEAD *)ins_head)->tail[0])
+
+#define	WT_SKIP_NEXT(ins)				((ins)->next[0])
+
+#define	WT_SKIP_FOREACH(ins, ins_head)	for((ins) = WT_SKIP_FIRST(ins_head); (ins) != NULL; (ins) = WT_SKIP_NEXT(ins))
 
 /*
  * Atomically allocate and swap a structure or array into place.
  */
-#define	WT_PAGE_ALLOC_AND_SWAP(s, page, dest, v, count)	do {		\
-	if (((v) = (dest)) == NULL) {					\
-		WT_ERR(__wt_calloc_def(s, count, &(v)));		\
-		if (WT_ATOMIC_CAS8(dest, NULL, v))			\
-			__wt_cache_page_inmem_incr(			\
-			    s, page, (count) * sizeof(*(v)));		\
-		else							\
-			__wt_free(s, v);				\
-	}								\
+#define	WT_PAGE_ALLOC_AND_SWAP(s, page, dest, v, count)	do {			\
+	if (((v) = (dest)) == NULL) {										\
+		WT_ERR(__wt_calloc_def(s, count, &(v)));						\
+		if (WT_ATOMIC_CAS8(dest, NULL, v))								\
+			__wt_cache_page_inmem_incr(s, page, (count) * sizeof(*(v)));\
+		else															\
+			__wt_free(s, v);											\
+	}																	\
 } while (0)
 
 /*
@@ -964,49 +958,39 @@ struct __wt_insert_head {
  * and may not exist.  The following macros return an array entry if the array
  * of pointers and the specific structure exist, else NULL.
  */
-#define	WT_ROW_INSERT_SLOT(page, slot)					\
-	((page)->pg_row_ins == NULL ? NULL : (page)->pg_row_ins[slot])
-#define	WT_ROW_INSERT(page, ip)						\
-	WT_ROW_INSERT_SLOT(page, WT_ROW_SLOT(page, ip))
-#define	WT_ROW_UPDATE(page, ip)						\
-	((page)->pg_row_upd == NULL ?					\
-	    NULL : (page)->pg_row_upd[WT_ROW_SLOT(page, ip)])
+#define	WT_ROW_INSERT_SLOT(page, slot)		((page)->pg_row_ins == NULL ? NULL : (page)->pg_row_ins[slot])
+
+#define	WT_ROW_INSERT(page, ip)				WT_ROW_INSERT_SLOT(page, WT_ROW_SLOT(page, ip))
+
+#define	WT_ROW_UPDATE(page, ip)				((page)->pg_row_upd == NULL ? NULL : (page)->pg_row_upd[WT_ROW_SLOT(page, ip)])
 /*
  * WT_ROW_INSERT_SMALLEST references an additional slot past the end of the
  * the "one per WT_ROW slot" insert array.  That's because the insert array
  * requires an extra slot to hold keys that sort before any key found on the
  * original page.
  */
-#define	WT_ROW_INSERT_SMALLEST(page)					\
-	((page)->pg_row_ins == NULL ?					\
-	    NULL : (page)->pg_row_ins[(page)->pg_row_entries])
+#define	WT_ROW_INSERT_SMALLEST(page)		((page)->pg_row_ins == NULL ? NULL : (page)->pg_row_ins[(page)->pg_row_entries])
 
 /*
  * The column-store leaf page update lists are arrays of pointers to structures,
  * and may not exist.  The following macros return an array entry if the array
  * of pointers and the specific structure exist, else NULL.
  */
-#define	WT_COL_UPDATE_SLOT(page, slot)					\
-	((page)->modify == NULL || (page)->modify->mod_update == NULL ?	\
-	    NULL : (page)->modify->mod_update[slot])
+#define	WT_COL_UPDATE_SLOT(page, slot)		((page)->modify == NULL || (page)->modify->mod_update == NULL ?	NULL : (page)->modify->mod_update[slot])
 
-#define	WT_COL_UPDATE(page, ip)						\
-	WT_COL_UPDATE_SLOT(page, WT_COL_SLOT(page, ip))
+#define	WT_COL_UPDATE(page, ip)				WT_COL_UPDATE_SLOT(page, WT_COL_SLOT(page, ip))
 
 /*
  * WT_COL_UPDATE_SINGLE is a single WT_INSERT list, used for any fixed-length
  * column-store updates for a page.
  */
-#define	WT_COL_UPDATE_SINGLE(page)					\
-	WT_COL_UPDATE_SLOT(page, 0)
+#define	WT_COL_UPDATE_SINGLE(page)			WT_COL_UPDATE_SLOT(page, 0)
 
 /*
  * WT_COL_APPEND is an WT_INSERT list, used for fixed- and variable-length
  * appends.
  */
-#define	WT_COL_APPEND(page)											\
-	((page)->modify != NULL && (page)->modify->mod_append != NULL ?	\
-	    (page)->modify->mod_append[0] : NULL)
+#define	WT_COL_APPEND(page)					((page)->modify != NULL && (page)->modify->mod_append != NULL ?	(page)->modify->mod_append[0] : NULL)
 
 /* WT_FIX_FOREACH walks fixed-length bit-fields on a disk page. */
 #define	WT_FIX_FOREACH(btree, dsk, v, i)							\

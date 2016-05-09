@@ -53,6 +53,7 @@ int __wt_kv_return(WT_SESSION_IMPL *session, WT_CURSOR_BTREE *cbt, WT_UPDATE *up
 		else
 			WT_RET(__wt_row_leaf_key(session, page, rip, &cursor->key, 0)); /*设置key的值*/
 
+		/*值是在append/update list当中，从当中取*/
 		if (upd != NULL) {
 			cursor->value.data = WT_UPDATE_DATA(upd);
 			cursor->value.size = upd->size;
