@@ -18,8 +18,7 @@
 /*获得的第i个insert队列的前一个*/
 #undef PREV_ITEM
 #define	PREV_ITEM(ins_head, insp, i)					\
-	(((insp) == &(ins_head)->head[i] || (insp) == NULL) ? NULL :	\
-	    (WT_INSERT *)((char *)((insp) - (i)) - offsetof(WT_INSERT, next)))
+	(((insp) == &(ins_head)->head[i] || (insp) == NULL) ? NULL : (WT_INSERT *)((char *)((insp) - (i)) - offsetof(WT_INSERT, next)))
 
 #undef	PREV_INS
 #define	PREV_INS(cbt, i)	PREV_ITEM((cbt)->ins_head, (cbt)->ins_stack[(i)], (i))
@@ -403,7 +402,7 @@ static inline int __cursor_row_prev(WT_CURSOR_BTREE* cbt, int newpage)
 
 new_insert:
 		if ((ins = cbt->ins) != NULL){
-			upd = _wt_txn_read(session, ins->upd);
+			upd = __wt_txn_read(session, ins->upd);
 			if (upd == NULL)
 				continue;
 

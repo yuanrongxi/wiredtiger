@@ -152,6 +152,13 @@ static inline int __wt_txn_visible(WT_SESSION_IMPL* session, uint64_t id)
 	return (bsearch(&id, txn->snapshot, txn->snapshot_count, sizeof(uint64_t), __wt_txnid_cmp) == NULL);
 }
 
+static inline int __wt_txn_read(WT_SESSION_IMPL* session, WT_UPDATE* upd)
+{
+	while (upd != NULL && !__wt_txn_visible(session, upd->txnid))
+		upd = upd->next;
+	return  upd;
+}
+
 /*检查如果事务设置的是自动提交，那么立即开始这个事务*/
 static inline int __wt_txn_autocommit_check(WT_SESSION_IMPL* session)
 {

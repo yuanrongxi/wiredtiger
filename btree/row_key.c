@@ -115,7 +115,8 @@ int __wt_row_leaf_key_work(WT_SESSION_IMPL* session, WT_PAGE* page, WT_ROW* rip_
 	direction = BACKWARD;
 	for (slot_offset = 0;;){
 		if (0){
-switch_and_jump:	/* Switching to a forward roll. */
+switch_and_jump:	
+			/* Switching to a forward roll. */
 			WT_ASSERT(session, direction == BACKWARD);
 			direction = FORWARD;
 
@@ -150,7 +151,7 @@ switch_and_jump:	/* Switching to a forward roll. */
 		}
 
 		/*判断key是否已经实例化*/
-		if (ikey == NULL){
+		if (ikey != NULL){
 			if (slot_offset == 0) {
 				keyb->data = p;
 				keyb->size = size;

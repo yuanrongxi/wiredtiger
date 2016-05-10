@@ -51,7 +51,7 @@ static inline int __cursor_fix_append_next(WT_CURSOR_BTREE* cbt, int newpage)
 	* insert is aborted, we simply return zero (empty), regardless of
 	* whether we are at the end of the data.
 	*/
-	if (cbt->recno < WT_INSERT_RECNO(cbt->ins) || (upd = __wt_txn_read(session, cbt->ins->upd)) == NULL){
+	if (cbt->recno < WT_INSERT_RECNO(cbt->ins) || (upd = __wt_txn_read(session, cbt->ins->upd)) == NULL){ /*没有可见的记录值，直接返回0*/
 		cbt->v = 0;
 		val->data = &cbt->v;
 	}
@@ -75,7 +75,7 @@ static inline int __cursor_fix_next(WT_CURSOR_BTREE* cbt, int newpage)
 	page = cbt->ref->page;
 	val = &cbt->iface.value;
 
-	/*初始化new page*/
+	/*切换到新的page上做next操作*/
 	if (newpage){
 		cbt->last_standard_recno = __col_fix_last_recno(page);
 		if (cbt->last_standard_recno == 0)
@@ -285,7 +285,7 @@ new_insert:
 			return 0;
 		}
 
-		/*到了page的末尾*/
+		/*检索page row entires数组， 到了page的末尾*/
 		if (cbt->row_iteration_slot >= page->pg_row_entries * 2 + 1)
 			return (WT_NOTFOUND);
 		++cbt->row_iteration_slot;

@@ -59,11 +59,11 @@ int __wt_kv_return(WT_SESSION_IMPL *session, WT_CURSOR_BTREE *cbt, WT_UPDATE *up
 			cursor->value.size = upd->size;
 			return (0);
 		}
-		/*可以直接通过rip指针获得value*/
+		/*可以直接通过rip指针获得value,K/V是存储在cell空间之内*/
 		if (__wt_row_leaf_value(page, rip, &cursor->value))
 			return 0;
 
-		/*没有定位到对应value的内存位置，表示没查找到*/
+		/*不是连续存储的，需要通过解析cell来定位到value*/
 		if (cell = __wt_row_leaf_value_cell(page, rip, NULL) == NULL){
 			cursor->value.size = 0;
 			return 0;
@@ -72,7 +72,7 @@ int __wt_kv_return(WT_SESSION_IMPL *session, WT_CURSOR_BTREE *cbt, WT_UPDATE *up
 
 		WT_ILLEGAL_VALUE(session);
 	}
-	/*通过cell解析到对应的value值*/
+	/*通过cell解析到对应的value值, ovfl item*/
 	__wt_cell_unpack(cell, &unpack);
 	WT_RET(__wt_page_cell_data_ref(session, page, &unpack, &cursor->value));
 
