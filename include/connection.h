@@ -131,7 +131,7 @@ struct __wt_connection_impl
 	WT_SPINLOCK					schema_lock;		/* Schema operation spinlock */
 	WT_SPINLOCK					table_lock;			/* Table creation spinlock */
 
-	WT_SPINLOCK*				page_lock;
+	WT_SPINLOCK*				page_lock;			/*用于page修改的spin lock群，按照槽位来进行lock，保持一定的并发性*/
 	u_int						page_lock_cnt;		/*page lock下一个使用的槽位序号*/
 
 	TAILQ_ENTRY(__wt_connection_impl) q;

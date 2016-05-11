@@ -30,7 +30,7 @@ static inline int __insert_serial_func(WT_SESSION_IMPL *session, WT_INSERT_HEAD 
 	return 0;
 }
 
-/*为column store追加一个WT_INSERT值，在追加之前判断recno是否分配了，如果没有分配，分配一个,这个过程树是被lock住的*/
+/*为column store追加一个WT_INSERT值，在追加之前判断recno是否分配了，如果没有分配，分配一个,这个过程是被lock住的*/
 static inline int __col_append_serial_func(WT_SESSION_IMPL *session, WT_INSERT_HEAD *ins_head,
 	WT_INSERT ***ins_stack, WT_INSERT *new_ins, uint64_t *recnop, u_int skipdepth)
 {
@@ -42,7 +42,7 @@ static inline int __col_append_serial_func(WT_SESSION_IMPL *session, WT_INSERT_H
 
 	/*获得插入记录的recno序号，如果序号没有分配，为其分配一个序号,并追加到skiplist的后面*/
 	recno = WT_INSERT_RECNO(new_ins);
-	if(recno == 0){
+	if (recno == 0){
 		recno = WT_INSERT_RECNO(new_ins) = btree->last_recno + 1;
 		WT_ASSERT(session, WT_SKIP_LAST(ins_head) == NULL || recno > WT_INSERT_RECNO(WT_SKIP_LAST(ins_head)));
 		for (i = 0; i < skipdepth; i++)
@@ -52,11 +52,51 @@ static inline int __col_append_serial_func(WT_SESSION_IMPL *session, WT_INSERT_H
 	WT_RET(__insert_serial_func(session, ins_head, ins_stack, new_ins, skipdepth));
 
 	*recnop = recno;
-	if(recno > btree->last_recno) /*更新树上的last recno*/
+	if (recno > btree->last_recno) /*更新树上的last recno*/
 		btree->last_recno = recno;
 
 	return 0;
 }
+
+/*向append skiplist中增加一个insert单元*/
+static inline int __wt_col_append_serial(WT_SESSION_IMPL *session, WT_PAGE *page, 
+						WT_INSERT_HEAD *ins_head, WT_INSERT ***ins_stack, WT_INSERT **new_insp,
+						size_t new_ins_size, uint64_t *recnop, u_int skipdepth)
+{
+	WT_INSERT *new_ins = *new_insp;
+	WT_DECL_RET;
+
+	/* Clear references to memory we now own. */
+	*new_insp = NULL;
+
+	/* Check for page write generation wrap. */
+	WT_RET(__page_write_gen_wrapped_check(page));
+
+	/* Acquire the page's spinlock, call the worker function. */
+	WT_PAGE_LOCK(session, page);
+	ret = __col_append_serial_func(session, ins_head, ins_stack, new_ins, recnop, skipdepth);
+	WT_PAGE_UNLOCK(session, page);
+
+	/* Free unused memory on error. */
+	if (ret != 0) {
+		__wt_free(session, new_ins);
+		return (ret);
+	}
+
+	/*
+	* Increment in-memory footprint after releasing the mutex: that's safe
+	* because the structures we added cannot be discarded while visible to
+	* any running transaction, and we're a running transaction, which means
+	* there can be no corresponding delete until we complete.
+	*/
+	__wt_cache_page_inmem_incr(session, page, new_ins_size);
+
+	/* Mark the page dirty after updating the footprint. */
+	__wt_page_modify_set(session, page);
+
+	return (0);
+}
+
 
 /*串行的增加一个WT_INSERT entry到btree上，这个过程是被lock住的*/
 static inline int __wt_insert_serial(WT_SESSION_IMPL *session, WT_PAGE *page,

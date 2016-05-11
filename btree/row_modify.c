@@ -51,7 +51,7 @@ int __wt_row_modify(WT_SESSION_IMPL* session, WT_CURSOR_BTREE* cbt, WT_ITEM* key
 
 	/* 修改操作， */
 	if(cbt->compare == 0){
-		if(cbt->ins == NULL){
+		if (cbt->ins == NULL){ /*是在update list当中找到修改的记录，直接获取udpate list当中对应的update对象*/
 			/* 为cbt游标分配一个update对象数组,并设置update数组槽位，原子操作性的分配*/
 			WT_PAGE_ALLOC_AND_SWAP(session, page, page->pg_row_upd, upd_entry, page->pg_row_entries);
 			upd_entry = &page->pg_row_upd[cbt->slot];
