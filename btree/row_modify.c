@@ -193,7 +193,7 @@ int __wt_update_alloc(WT_SESSION_IMPL* session, WT_ITEM* value, WT_UPDATE** updp
 	return 0;
 }
 
-/* 检查过期废弃的update，并在update list去除，并返回去除后的update第一个update单元 */
+/* 检查过期废弃的update，只有下最近一个session能看到的update版本，前面处于rollback的版本作为废弃数据 */
 WT_UPDATE* __wt_update_obsolete_check(WT_SESSION_IMPL *session, WT_UPDATE *upd)
 {
 	WT_UPDATE *first, *next;
