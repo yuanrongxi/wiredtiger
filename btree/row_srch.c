@@ -102,7 +102,7 @@ int __wt_search_insert(WT_SESSION_IMPL* session, WT_CURSOR_BTREE* cbt, WT_ITEM* 
 			cbt->ins_stack[i--] = insp--;
 			skiphigh = match;
 		}
-		else{
+		else{ /*找到了！！！*/
 			for (; i >= 0; i--) {
 				cbt->next_stack[i] = ins->next[i];
 				cbt->ins_stack[i] = &ins->next[i];
@@ -194,7 +194,7 @@ restart:
 		/*用二分法进行内部索引页内定位,定位到key对应的leaf page*/
 		base = 1;
 		limit = pindex->entries - 1;
-		if (collator == NULL){
+		if (collator == NULL){ /*key范围增量比较,防止比较过程运算过多*/
 			for (; limit != 0; limit >>= 1) {
 				indx = base + (limit >> 1);
 				descent = pindex->index[indx];
@@ -213,7 +213,7 @@ restart:
 					goto descend;
 			}
 		}
-		else{
+		else{/*通过collator来比较*/
 			for (; limit != 0; limit >>= 1) {
 				indx = base + (limit >> 1);
 				descent = pindex->index[indx];

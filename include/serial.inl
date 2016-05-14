@@ -155,7 +155,8 @@ static inline int __wt_update_serial(WT_SESSION_IMPL *session, WT_PAGE *page,
 	 * 这里的WT_WRITE_BARRIER作用是每次获取upd->next都应该是新的
 	 */
 	while(!WT_ATOMIC_CAS8(*srch_upd, upd->next, upd)){
-		if ((ret = __wt_txn_update_check(session, upd->next = *srch_upd)) != 0) {
+		/*检查是否有其他的session在这个更新之前做了upd更新且对这个session不可见，如果有，只能回滚这次更新*/
+		if ((ret = __wt_txn_update_check(session, upd->next = *srch_upd)) != 0) { 
 			/* Free unused memory on error. */
 			__wt_free(session, upd);
 			return (ret);
@@ -174,7 +175,7 @@ static inline int __wt_update_serial(WT_SESSION_IMPL *session, WT_PAGE *page,
 		F_CAS_ATOMIC(page, WT_PAGE_SCANNING, ret);
 		if(ret != 0)
 			return 0;
-		/*检查过期的update list,比废弃掉不用过期的upd单元*/
+		/*检查过期的update list,将废弃掉不用的upd单元释放*/
 		obsolete = __wt_update_obsolete_check(session, upd->next);
 		F_CLR_ATOMIC(page, WT_PAGE_SCANNING);
 		if(obsolete != NULL)

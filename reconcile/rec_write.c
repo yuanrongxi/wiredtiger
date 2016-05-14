@@ -310,7 +310,7 @@ int __wt_reconcile(WT_SESSION_IMPL* session, WT_REF* ref, WT_SALVAGE_COOKIE* sal
 		WT_PAGE_LOCK(session, page);
 	}
 	else{
-		/*将page设置为scanning状态，这里会spin wait，直到设置成功为止*/
+		/*将page设置为scanning状态，这里会spin wait，直到设置成功为止,防止在recocile过程出现对update list进行垃圾回收*/
 		for (;;){
 			F_CAS_ATOMIC(page, WT_PAGE_SCANNING, ret);
 			if (ret == 0)

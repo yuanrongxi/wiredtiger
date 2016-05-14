@@ -239,7 +239,7 @@ static inline int __wt_txn_id_check(WT_SESSION_IMPL* session)
 	return 0;
 }
 
-/*检查upd单元是否可以在session事务中执行*/
+/*检查upd单元中是否有session不可见的更新，如果有，表示session不能对upd做更新*/
 static inline int __wt_txn_update_check(WT_SESSION_IMPL* session, WT_UPDATE* upd)
 {
 	WT_TXN *txn;
