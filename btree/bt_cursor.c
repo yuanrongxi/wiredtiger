@@ -22,7 +22,7 @@ static inline int __cursor_size_chk(WT_SESSION_IMPL* session, WT_ITEM* kv)
 		return 0;
 	}
 
-	/*1G以下的长度默认是合法的，最大可以到4G*/
+	/*1G以下的key长度默认是合法的，最大可以到4G*/
 	if (kv->size < WT_GIGABYTE)
 		return 0;
 
@@ -30,7 +30,7 @@ static inline int __cursor_size_chk(WT_SESSION_IMPL* session, WT_ITEM* kv)
 	if (kv->size > WT_BTREE_MAX_OBJECT_SIZE)
 		ret = EINVAL;
 	else {
-		/*进行block write尝试，并返回写入后的size,看是否能正常写入*/
+		/*进行block write长度校验，并返回写入后的size,看是否能正常写入*/
 		size = kv->size;
 		ret = bm->write_size(bm, session, &size);
 	}
@@ -376,10 +376,10 @@ int __wt_btcur_insert(WT_CURSOR_BTREE* cbt)
 
 	/*对kv的值大小做校验过滤*/
 	if (btree->type == BTREE_ROW)
-		WT_RET(__cursor_size_chk(session, &cursor->value));
+		WT_RET(__cursor_size_chk(session, &cursor->key));
 	WT_RET(__cursor_size_chk(session, &cursor->value));
 
-	/*设置btree上的page是可以驱逐的*/
+	/*设置btree上的page是可以驱逐的,防止bulk方式的插入记录无法完全插入到btree上*/
 	if (btree->bulk_load_ok){
 		btree->bulk_load_ok = 0;
 		__wt_btree_evictable(session, 1);
@@ -405,8 +405,7 @@ retry:
 
 		/*如果是append insert,需要判断键值重复*/
 		if (!F_ISSET(cursor, WT_CURSTD_OVERWRITE) &&
-			((cbt->compare == 0 && __cursor_valid(cbt, NULL)) ||
-			(cbt->compare != 0 && __cursor_fix_implicit(btree, cbt))))
+			((cbt->compare == 0 && __cursor_valid(cbt, NULL)) || (cbt->compare != 0 && __cursor_fix_implicit(btree, cbt))))
 			WT_ERR(WT_DUPLICATE_KEY);
 
 		WT_ERR(__cursor_col_modify(session, cbt, 0));
