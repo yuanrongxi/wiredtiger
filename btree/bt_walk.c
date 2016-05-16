@@ -89,6 +89,10 @@ ascend:
 				/*页如果已经被删除了，跳过它*/
 				if (ref->state == WT_REF_DELETED && __wt_delete_page_skip(session, ref))
 					break;
+
+				WT_ERR(__wt_delete_page(session, ref, &skip));
+				if (skip)
+					break;
 			}
 			else if (LF_ISSET(WT_READ_COMPACT)){
 				if (ref->state == WT_REF_DELETED)

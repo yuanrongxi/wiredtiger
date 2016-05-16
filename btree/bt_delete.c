@@ -5,7 +5,7 @@
 ***********************************************************************/
 #include "wt_internal.h"
 
-/*尝试删除一个page*/
+/*尝试删除一个page,这个page必须是没有被修改过的,它内存中的数据和磁盘上的数据是一致的*/
 int __wt_delete_page(WT_SESSION_IMPL* session, WT_REF* ref, int* skipp)
 {
 	WT_DECL_RET;
@@ -58,7 +58,7 @@ err:
 	return ret;
 }
 
-/*事务rollback时，将实例化的page删除*/
+/*事务回滚range deleted,恢复deleted的page*/
 void __wt_delete_page_rollback(WT_SESSION_IMPL* session, WT_REF* ref)
 {
 	WT_UPDATE **upd;
@@ -92,7 +92,8 @@ void __wt_delete_page_rollback(WT_SESSION_IMPL* session, WT_REF* ref)
 			 * The page is in an in-memory state, walk the list of
 			 * update structures and abort them.
 			 * 大致的意思是说将内存中的page设置一个放弃的TXN ID,来标记
-			 * 这个page已经处于放弃状态，防止其他地方的引用。
+			 * 这个delete page的操作已经被回滚，恢复到删除前的状态，
+			 * 防止其他事务的引用取消的操作结果。
 			 */
 			for (upd =ref->page_del->update_list; *upd != NULL; ++upd)
 				(*upd)->txnid = WT_TXN_ABORTED;
@@ -124,16 +125,15 @@ int __wt_delete_page_skip(WT_SESSION_IMPL *session, WT_REF *ref)
 	if (!WT_ATOMIC_CAS4(ref->state, WT_REF_DELETED, WT_REF_LOCKED))
 		return 0;
 
-	/*page del是null,表示已经没有其他地方引用他，如果操作事务是对这个page可见，那么应该skip*/
-	skip = (ref->page_del == NULL ||
-		__wt_txn_visible(session, ref->page_del->txnid));
+	/*page del是null,表示已经没有其他地方引用他，如果操作事务是对这个page可见，那么表示这个page对session来说是删除的，应该skip*/
+	skip = (ref->page_del == NULL || __wt_txn_visible(session, ref->page_del->txnid));
 
 	WT_PUBLISH(ref->state, WT_REF_DELETED);
 
 	return skip;
 }
 
-/*实例化一个deleted row leaf page*/
+/*实例化一个deleted row leaf page,标记批量删除的版本和事务*/
 int __wt_delete_page_instantiate(WT_SESSION_IMPL *session, WT_REF *ref)
 {
 	WT_BTREE *btree;
@@ -162,7 +162,7 @@ int __wt_delete_page_instantiate(WT_SESSION_IMPL *session, WT_REF *ref)
 	WT_ERR(__wt_calloc_def(session, page->pg_row_entries, &upd_array));
 	page->pg_row_upd = upd_array;
 
-	/*设置upd的txnid，并将这些行实例全部放入update_list中*/
+	/*设置upd的txnid，建立一个基于deleted page的mvcc记录链表*/
 	for (i = 0, size = 0; i < page->pg_row_entries; ++i) {
 		WT_ERR(__wt_calloc_one(session, &upd));
 		WT_UPDATE_DELETED_SET(upd);
