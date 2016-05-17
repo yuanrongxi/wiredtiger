@@ -153,7 +153,7 @@ static inline void __wt_cache_page_evict(WT_SESSION_IMPL* session, WT_PAGE* page
 	(void)WT_ATOMIC_ADD8(cache->pages_evict, 1);
 }
 
-/*计算upd在内存中修改的数据总数*/
+/*计算upd list中多个版本记录在内存中修改的数据总数空间*/
 static inline size_t __wt_update_list_memsize(WT_UPDATE* upd)
 {
 	size_t upd_size;
@@ -219,7 +219,7 @@ static inline void __wt_page_only_modify_set(WT_SESSION_IMPL* session, WT_PAGE* 
 	if(WT_ATOMIC_ADD4(page->modify->write_gen, 1) == 1){
 		__wt_cache_dirty_incr(session, page);
 
-		/*设置snapshot的落盘位置*/
+		/*设置snapshot的落盘事务ID*/
 		if (F_ISSET(&session->txn, TXN_HAS_SNAPSHOT))
 			page->modify->disk_snap_min = session->txn.snap_min;
 
@@ -544,7 +544,7 @@ static inline int __wt_ref_info(WT_SESSION_IMPL* session, WT_REF* ref, const uin
 		if(typep != NULL)
 			*typep = 0;
 	}
-	else if (__wt_off_page(ref->home, addr)){ /*addr存储部分在磁盘上，需要进行磁盘读取*/
+	else if (__wt_off_page(ref->home, addr)){ /*addr存储部分不在在磁盘隐射的内存空间上，应该是后来添加上去的，只要进行直接读取即可*/
 		*addrp = addr->addr;
 		*sizep = addr->size;
 		if (typep != NULL)
@@ -562,7 +562,7 @@ static inline int __wt_ref_info(WT_SESSION_IMPL* session, WT_REF* ref, const uin
 			WT_ILLEGAL_VALUE(session);
 		}
 	}
-	else{ /*从unpack中解析*/
+	else{ /*是在磁盘隐射的空间上，说明数据被reconcile过，进行cell解析得到*/
 		__wt_cell_unpack((WT_CELL *)addr, unpack);
 		*addrp = unpack->data;
 		*sizep = unpack->size;
@@ -590,18 +590,18 @@ static inline int __wt_page_can_evict(WT_SESSION_IMPL* session, WT_PAGE* page, i
 	if(F_ISSET_ATOMIC(page, WT_PAGE_EVICT_LRU))
 		return 0;
 
-	/*page正在分裂,不能进行淘汰*/
+	/*internal page正在分裂,不能进行淘汰*/
 	if(check_splits && WT_PAGE_IS_INTERNAL(page) && !__wt_txn_visible_all(session, mod->mod_split_txn))
 		return 0;
 
-	/*btree正在进行checkpoint，而且这个page是被修改过的，不能进行淘汰*/
+	/*btree正在进行checkpoint，而且这个page是被修改过的，不能进行淘汰，因为checkpoint需要把整个修改的数据一次性落盘*/
 	if (btree->checkpointing && (__wt_page_is_modified(page) || F_ISSET(mod, WT_PM_REC_MULTIBLOCK))) {
 		WT_STAT_FAST_CONN_INCR(session, cache_eviction_checkpoint);
 		WT_STAT_FAST_DATA_INCR(session, cache_eviction_checkpoint);
 		return 0;
 	}
 
-	/*page不是cache中最早有读操作的页，而且还有正在执行的事务依赖于这个page,不能进行淘汰*/
+	/*page还有都操作，而且还有正在执行的事务依赖于这个page,不能进行淘汰*/
 	if (page->read_gen != WT_READGEN_OLDEST && !__wt_txn_visible_all(session, __wt_page_is_modified(page) ? mod->update_txn : mod->rec_max_txn))
 		return 0;
 
@@ -624,7 +624,7 @@ static inline int  __wt_page_release_evict(WT_SESSION_IMPL* session, WT_REF* ref
 	page = ref->page;
 	too_big = (page->memory_footprint > btree->maxmempage) ? 1 : 0;
 
-	/*先将state从ref mem设置为LOCKED,防止其他事务操作这个页*/
+	/*先将state从ref mem设置为LOCKED,防止其他事务操作这个页,因为在evcit过程中需要对hazard array进行扫描，确定没有任何线程在操作这个PAGE方可evcit成功*/
 	locked = WT_ATOMIC_CAS4(ref->state, WT_REF_MEM, WT_REF_LOCKED);
 	WT_TRET(__wt_hazard_clear(session, page));
 	if(!locked){
@@ -644,7 +644,7 @@ static inline int  __wt_page_release_evict(WT_SESSION_IMPL* session, WT_REF* ref
 		WT_STAT_FAST_CONN_INCR(session, cache_eviction_force_fail);
 
 	/*淘汰完毕，btree淘汰计数器递减*/
-	(void)WT_ATOMIC_SUB4(btree_evict_busy, 1);
+	(void)WT_ATOMIC_SUB4(btree->evict_busy, 1);
 
 	return ret;
 }
@@ -664,7 +664,7 @@ static inline int __wt_page_release(WT_SESSION_IMPL* session, WT_REF* ref, uint3
 
 	page = ref->page;
 
-	/*判断是否能淘汰page, 释放的一定是最早发生读操作的page*/
+	/*判断是否能淘汰page, page被标记为可evcit状态在读且不是常驻内存的BTREE，可以尝试进行page的evict操作*/
 	if(page->read_gen != WT_READGEN_OLDEST || LF_ISSET(WT_READ_NO_EVICT) || F_ISSET(btree, WT_BTREE_NO_EVICTION)
 		|| !__wt_page_can_evict(session, page, 1)){
 			return __wt_hazard_clear(session, page);

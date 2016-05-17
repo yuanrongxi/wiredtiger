@@ -16,15 +16,15 @@ int __wt_cache_read(WT_SESSION_IMPL* session, WT_REF* ref)
 
 	WT_CLEAR(tmp);
 
-	/*检查ref是否已经开始对page的磁盘数据进行读取*/
-	if (WT_ATOMIC_CAS4(ref->state, WT_REF_DISK, WT_REF_READING))
+	/*检查ref是否已经开始对page的磁盘数据进行读取,在磁盘上的page一定是WT_REF_DISK或者WT_REF_DELETED状态，否则它就在内存中*/
+	if (WT_ATOMIC_CAS4(ref->state, WT_REF_DISK, WT_REF_READING)) /*设置成reading,让其他的线程事务在引用这个page时等page完全载入内存中才引用*/
 		previous_state = WT_REF_DISK;
-	else if (WT_ATOMIC_CAS4(ref->state, WT_REF_DELETED, WT_REF_LOCKED)) /*检查ref的状态是否是deleted，如果是，先lock他*/
+	else if (WT_ATOMIC_CAS4(ref->state, WT_REF_DELETED, WT_REF_LOCKED)) /*检查ref的状态是否是deleted，如果是，先lock它*/
 		previous_state = WT_REF_DELETED;
 	else
 		return 0;
 
-	/*获得page的block address 和 cookie*/
+	/*获得page的block address*/
 	WT_ERR(__wt_ref_info(session, ref, &addr, &addr_size, NULL));
 	if (addr == NULL){ /*没找到block addr,直接新建一个page*/
 		WT_ASSERT(session, previous_state == WT_REF_DELETED);
@@ -39,7 +39,7 @@ int __wt_cache_read(WT_SESSION_IMPL* session, WT_REF* ref)
 		WT_ERR(__wt_page_inmem(session, ref, tmp.data, tmp.memsize, WT_DATA_IN_ITEM(&tmp) ? WT_PAGE_DISK_ALLOC : WT_PAGE_DISK_MAPPED, &page));
 		tmp.mem = NULL;
 
-		/*如果page已经处于删除状态，从BTREE树上删除掉这个page的节点*/
+		/*如果page已经处于删除状态，那么需要构建一个page_deleted特殊实例化这个page，并做删除事务隔离*/
 		if (previous_state == WT_REF_DELETED)
 			WT_ERR(__wt_delete_page_instantiate(session, ref));
 	}

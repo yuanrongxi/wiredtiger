@@ -51,7 +51,7 @@ int __wt_page_in_func(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
 			/*page已经做了cache read，无需read*/
 			if (LF_ISSET(WT_READ_CACHE))
 				return WT_NOTFOUND;
-
+			/*检查lru cache中的数据是否满，如果超过95%的占有率，先要进行lru淘汰，再进行当前引用page的读取*/
 			WT_RET(__wt_cache_full_check(session));
 			WT_RET(__wt_cache_read(session, ref));
 			oldgen = LF_ISSET(WT_READ_WONT_NEED) || F_ISSET(session, WT_SESSION_NO_CACHE);

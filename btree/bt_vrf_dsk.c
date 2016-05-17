@@ -526,7 +526,7 @@ match_err:			WT_RET_VRFY(session,
 	return 0;
 }
 
-/*校验最后一个cell与dsk之间的内存关系，也就是说最后一个cell一定是和dsk->memszie的偏移是重合的，否则dsk是有问题的*/
+/*校验最后一个cell与dsk之间的内存关系，也就是说最后一个cell末尾一定是和dsk->memszie的偏移是重合的，否则dsk是有问题的*/
 static int __verify_dsk_memsize(WT_SESSION_IMPL* session, const char* addr, const WT_PAGE_HEADER* dsk, WT_CELL* cell)
 {
 	size_t len;

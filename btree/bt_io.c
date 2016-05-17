@@ -18,7 +18,7 @@ int __wt_bt_read(WT_SESSION_IMPL* session, WT_ITEM* buf, const uint8_t* addr, si
 	btree = S2BT(session);
 	bm = btree->bm;
 
-	/*加入btree是一个压缩型的数据存储，必须先解压,那么读取的数据必须先存入一个临时缓冲区中，然后解压到buf中*/
+	/*假如btree是一个压缩型的数据存储，必须先解压,那么读取的数据必须先存入一个临时缓冲区中，然后解压到buf中*/
 	if (btree->compressor == NULL){
 		WT_RET(bm->read(bm, session, buf, addr, addr_size));
 		dsk = buf->data;
