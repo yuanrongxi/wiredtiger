@@ -601,7 +601,7 @@ retry:
 		WT_ERR(__cursor_col_search(session, cbt));
 		if (!F_ISSET(cursor, WT_CURSTD_OVERWRITE)){
 			WT_ERR(__curfile_update_check(cbt));
-			if ((cbt->compare != 0 || !cursor_valid(cbt, NULL)) && __cursor_fix_implicit(btree, cbt))
+			if ((cbt->compare != 0 || !__cursor_valid(cbt, NULL)) && __cursor_fix_implicit(btree, cbt))
 				return WT_NOTFOUND;
 		}
 		/*¼ÇÂ¼ÐÞ¸Ä*/
