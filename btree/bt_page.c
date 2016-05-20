@@ -25,7 +25,7 @@ static int __evict_force_check(WT_SESSION_IMPL* session, WT_PAGE* page, uint32_t
 	if (LF_ISSET(WT_READ_NO_EVICT) || F_ISSET(btree, WT_BTREE_NO_EVICTION))
 		return 0;
 
-	/*没太弄明白为什么没有修改的page不做驱逐*/
+	/*没太弄明白为什么没有修改的page不做驱逐,如果没有做修改，即使是超过了最大内存限制，也不做evict操作，可能是为了保护读page*/
 	if (page->modify == NULL)
 		return 0;
 
@@ -72,21 +72,23 @@ int __wt_page_in_func(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
 			break;
 
 		case WT_REF_SPLIT:
+			/*ref对应的page在内存中被split后，对应的page在内存中不存在了，需要重新在上一层做一次检索定位新的ref*/
 			return WT_RESTART;
 
 			/*已经导入内存中了*/
 		case WT_REF_MEM:
-			WT_RET(__wt_hazard_set(session, ref, &busy)); /*如果page导入memory，需要占用一个hazard pointer，如果占用hazard pointer时返回busy，表示这个page可能已经正在被驱逐,需要重试*/
+			/*如果page导入memory，需要占用一个hazard pointer，如果占用hazard pointer时返回busy，表示这个page可能已经正在被驱逐,需要重试*/
+			WT_RET(__wt_hazard_set(session, ref, &busy)); 
 			if (busy){
 				WT_STAT_FAST_CONN_INCR(session, page_busy_blocked);
 				break;
 			}
 
-			/*走到这一步，说明page无法获得一个hazard pointer，那么应该考虑evict它*/
+			/*走到这一步，说明page获得一个hazard pointer*/
 			page = ref->page;
 			WT_ASSERT(session, page != NULL);
 
-			/*检查page是否可以驱逐，如果可以进行强制驱逐ref对应的page*/
+			/*如果这个page的内存占用超过了设置最大内存，进行evict操作，重整内存结构,有可能会触发split操作*/
 			if (force_attempts < 10 && __evict_force_check(session, page, flags)){
 				++force_attempts;
 				ret = __wt_page_release_evict(session, ref);
@@ -109,6 +111,7 @@ int __wt_page_in_func(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
 				return (ret);
 			}
 
+			/*如果page是没有设置evict操作的且read_gen是一个初始化状态，那么设置一个可以evict给它进行动态evict*/
 			if (oldgen && page->read_gen == WT_READGEN_NOTSET)
 				__wt_page_evict_soon(page);
 			else if (!LF_ISSET(WT_READ_NO_GEN) && page->read_gen != WT_READGEN_OLDEST && page->read_gen < __wt_cache_read_gen(session))
@@ -130,7 +133,7 @@ int __wt_page_in_func(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t flags)
 	}
 }
 
-/*创建并读取一个PAGE内容到cache中*/
+/*根据page的entries分配一个完成的page内存对象*/
 int __wt_page_alloc(WT_SESSION_IMPL* session, uint8_t type, uint64_t recno, uint32_t alloc_entries, int alloc_refs, WT_PAGE** pagep)
 {
 	WT_CACHE *cache;
@@ -168,6 +171,7 @@ int __wt_page_alloc(WT_SESSION_IMPL* session, uint8_t type, uint64_t recno, uint
 	/*分配page对象空间并进行page类型设置*/
 	WT_RET(__wt_calloc(session, 1, size, &page));
 	page->type = type;
+	/*设置一个初始化的read_gen值*/
 	page->read_gen = WT_READGEN_NOTSET;
 
 	switch (type){
@@ -179,7 +183,7 @@ int __wt_page_alloc(WT_SESSION_IMPL* session, uint8_t type, uint64_t recno, uint
 	case WT_PAGE_COL_INT:
 	case WT_PAGE_ROW_INT:
 		page->pg_intl_recno = recno;
-
+		/*创建内存中的WT_REF对象和对应的ref slot array空间*/
 		WT_ERR(__wt_calloc(session, 1, sizeof(WT_PAGE_INDEX)+alloc_entries * sizeof(WT_REF *), &p));
 		size += sizeof(WT_PAGE_INDEX)+alloc_entries * sizeof(WT_REF *);
 		pindex = p;
@@ -248,15 +252,27 @@ int __wt_page_inmem(WT_SESSION_IMPL *session, WT_REF *ref, const void *image, si
 		break;
 
 	case WT_PAGE_ROW_INT:
+		/*
+		* Row-store internal page entries map one-to-two to the number
+		* of physical entries on the page (each entry is a key and
+		* location cookie pair, KEY算一个entry,value算一个entry).
+		*/
 		alloc_entries = dsk->u.entries / 2;
 		break;
 
 	case WT_PAGE_ROW_LEAF:
+		/*
+		* If the "no empty values" flag is set, row-store leaf page
+		* entries map one-to-one to the number of physical entries
+		* on the page (each physical entry is a key or value item).
+		* If that flag is not set, there are more keys than values,
+		* we have to walk the page to figure it out.
+		*/
 		if (F_ISSET(dsk, WT_PAGE_EMPTY_V_ALL))
 			alloc_entries = dsk->u.entries;
 		else if (F_ISSET(dsk, WT_PAGE_EMPTY_V_NONE))
 			alloc_entries = dsk->u.entries / 2;
-		else
+		else /*根据实际情况扫描得到到底有多少个k/v entry*/
 			WT_RET(__inmem_row_leaf_entries(session, dsk, &alloc_entries));
 		break;
 
@@ -502,7 +518,7 @@ err:
 	return ret;
 }
 
-/*计算行存储page中的entry数量*/
+/*计算从磁盘上刚读取的行存储page中的entry数量*/
 static int __inmem_row_leaf_entries(WT_SESSION_IMPL* session, const WT_PAGE_HEADER* dsk, uint32_t* nindxp)
 {
 	WT_BTREE *btree;
@@ -569,8 +585,9 @@ static int __inmem_row_leaf(WT_SESSION_IMPL* session, WT_PAGE* page)
 				break;
 
 			case WT_CELL_VALUE:
+				/*将K_CELL_FLAG设置成KV_CELL_FLAG,这里的rip -1的做法是因为WT_CELL_KEY先会被读出执行，造成rip ++,但是value是++之前的key对应的value*/
 				if (!btree->huffman_value)
-					__wt_row_leaf_value_set(page, rip - 1, unpack); /*将K_CELL_FLAG设置成KV_CELL_FLAG*/
+					__wt_row_leaf_value_set(page, rip - 1, unpack); 
 				break;
 
 			case WT_CELL_VALUE_OVFL:

@@ -206,7 +206,7 @@ static int __evict_child_check(WT_SESSION_IMPL* session, WT_REF* parent)
 	return (0);
 }
 
-/**/
+/*驱逐内存中的page,并将page中的修改数据落盘到磁盘上*/
 static int __evict_review(WT_SESSION_IMPL* session, WT_REF* ref, int exclusive, int* inmem_splitp)
 {
 	WT_DECL_RET;

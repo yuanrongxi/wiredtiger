@@ -687,7 +687,7 @@ static int __split_parent(WT_SESSION_IMPL *session, WT_REF *ref, WT_REF **ref_ne
 	pindex = WT_INTL_INDEX_GET_SAFE(parent);
 	parent_entries = pindex->entries;
 
-	/*先移除被删除孩子page的ref entries,因为在split的时候，不需要保留deleted page*/
+	/*计算处于WT_REF_DELETED且无其他事务引用状态下的page数，并将处于这个状态下的ref标记为回收(WT_REF_SPLIT)*/
 	for (i = 0, deleted_entries = 1; i < parent_entries; ++i) {
 		next_ref = pindex->index[i];
 		WT_ASSERT(session, next_ref->state != WT_REF_SPLIT);
@@ -753,6 +753,7 @@ static int __split_parent(WT_SESSION_IMPL *session, WT_REF *ref, WT_REF **ref_ne
 	* The new page index is in place, free the WT_REF we were splitting
 	* and any deleted WT_REFs we found, modulo the usual safe free
 	* semantics.
+	* 释放deleted ref内存结构对象
 	*/
 	for (i = 0; deleted_entries > 0 && i < parent_entries; ++i){
 		next_ref = pindex->index[i];
@@ -783,7 +784,7 @@ static int __split_parent(WT_SESSION_IMPL *session, WT_REF *ref, WT_REF **ref_ne
 				WT_TRET(__split_safe_free(session, split_gen, 0, ikey, size));
 				parent_decr += size;
 			}
-			/*释放掉它管辖范围下被删除的page空间*/
+			/*释放掉它管辖范围下被删除的page_del结构空间*/
 			if (next_ref->page_del != NULL){
 				__wt_free(session,next_ref->page_del->update_list);
 				__wt_free(session, next_ref->page_del);
@@ -862,7 +863,7 @@ err:
 
 #define	WT_MIN_SPLIT_SKIPLIST_DEPTH	WT_MIN(6, WT_SKIP_MAXDEPTH - 1)
 
-/* 在insert的时候判断是否要进行split,如果需要，将page一分为二 */
+/* 在内存中将page一分为二，这个做法是加快对顺序插入的速度,一般是从最后一个row上进行split */
 int __wt_split_insert(WT_SESSION_IMPL* session, WT_REF* ref, int* splitp)
 {
 	WT_BTREE *btree;
@@ -944,7 +945,7 @@ int __wt_split_insert(WT_SESSION_IMPL* session, WT_REF* ref, int* splitp)
 	* suffix-compressed, and after the split the truncated key may not be
 	* valid.
 	*/
-	/*设置child ref->key*/
+	/*设置第一个child ref->key*/
 	WT_ERR(__wt_scr_alloc(session, 0, &key));
 	ins = WT_SKIP_FIRST(WT_ROW_INSERT_SMALLEST(page));
 	if (ins != NULL){
