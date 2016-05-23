@@ -55,7 +55,7 @@ static int __split_stash_add(WT_SESSION_IMPL* session, uint64_t split_gen, void*
 	return 0;
 }
 
-/* 废弃释放掉不是active状态的split stash单元 */
+/* 废弃释放掉不是active状态的split stash单元, split stash->p是internal page中的ref index array缓冲区，这个需要按照split_gen进行顺序释放。 */
 void __wt_split_stash_discard(WT_SESSION_IMPL* session)
 {
 	WT_SPLIT_STASH *stash;
@@ -144,7 +144,7 @@ static int __split_should_deepen(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t
 	if (page->memory_footprint < btree->maxmempage)
 		return 0;
 
-	/*在page split操作时，page中应该有足够的entries数量来支持split操作*/
+	/*在page split操作时，page中应该有足够的entries数量来支持split操作,已经触发了增加层级的阈值*/
 	if (pindex->entries > btree->split_deepen_min_child){
 		*childrenp = pindex->entries / btree->split_deepen_per_child; /*确定split后的孩子节点个数*/
 		return 1;
@@ -159,8 +159,7 @@ static int __split_should_deepen(WT_SESSION_IMPL *session, WT_REF *ref, uint32_t
 	* 如果page的entry数量 > 100并且是root page进行split操作
 	* 如果是普通page且他的footprint占用的内存大于cache_size的1/4，考虑split,因为page太大
 	*/
-	if (pindex->entries >= 100 &&
-		(__wt_ref_is_root(ref) || page->memory_footprint >= S2C(session)->cache_size / 4)) {
+	if (pindex->entries >= 100 && (__wt_ref_is_root(ref) || page->memory_footprint >= S2C(session)->cache_size / 4)) {
 		*childrenp = pindex->entries / 10;
 		return (1);
 	}
@@ -183,9 +182,9 @@ static int __split_ovfl_key_cleanup(WT_SESSION_IMPL* session, WT_PAGE* page, WT_
 	* along with any backing blocks.
 	*/
 	if ((ikey = __wt_ref_key_instantiated(ref)) == NULL)
-		return (0);
+		return 0;
 	if ((cell_offset = ikey->cell_offset) == 0)
-		return (0);
+		return 0;
 
 	/* Leak blocks rather than try this twice. */
 	ikey->cell_offset = 0;
@@ -420,6 +419,7 @@ static int __split_deepen(WT_SESSION_IMPL *session, WT_PAGE *parent, uint32_t ch
 			* pages may have been read in since then.  Check and
 			* only update pages that reference the original page,
 			* they must be wrong.
+			* 将child中的所有ref->home指向child page,因为在之前指向的是parent page
 			*/
 			if (child_ref->home == parent) {
 				child_ref->home = child;
@@ -852,7 +852,7 @@ err:
 	/*使用了hazard pointer标记，释放掉对应的标记*/
 	if (hazard)
 		WT_TRET(__wt_hazard_clear(session, parent));
-	/*只有错误的时候才会释放这个，*/
+	/*只有错误的时候才会释放这个*/
 	__wt_free_ref_index(session, NULL, alloc_index, 0);
 
 	if (ret != 0 && ret != WT_PANIC)
