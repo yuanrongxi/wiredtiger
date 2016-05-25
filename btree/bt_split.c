@@ -469,7 +469,7 @@ err:
 	return ret;
 }
 
-/*当处btree于不可以更新状态,需要实例化一个临时的page来做更新保存，等可以写的时候，再同步到btree上？*/
+/*将multi指向orig page中对应的记录转移到ref对应的page上，ref对应page是在这个函数中分配的*/
 static int __split_multi_inmem(WT_SESSION_IMPL* session, WT_PAGE* orig, WT_REF* ref, WT_MULTI* multi)
 {
 	WT_CURSOR_BTREE cbt;
@@ -598,7 +598,7 @@ int __wt_multi_to_ref(WT_SESSION_IMPL* session, WT_PAGE* page, WT_MULTI* multi, 
 		WT_RET(__wt_strndup(session, multi->addr.addr, addr->size, &addr->addr));
 	}
 	else
-		WT_RET(__split_multi_inmem(session, page, ref, multi)); /*将multi block存储的信息注意到btree上，因为在split时候是将数据暂时放在multi block上*/
+		WT_RET(__split_multi_inmem(session, page, ref, multi)); /*将multi block存储的信息构件一个ref page到btree上，因为在split时候是将数据暂时放在multi block上*/
 
 	switch (page->type){
 	case WT_PAGE_ROW_INT:

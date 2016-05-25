@@ -216,7 +216,7 @@ static int __ovfl_reuse_wrapup(WT_SESSION_IMPL* session, WT_PAGE* page)
 	int i;
 
 	bm = S2BT(session)->bm;
-
+	head = page->modify->ovfl_track->ovfl_reuse;
 	/*
 	* Discard any overflow records that aren't in-use, freeing underlying blocks.
 	* First, walk the overflow reuse lists (except for the lowest one),
@@ -535,7 +535,7 @@ static int __ovfl_txnc_wrapup(WT_SESSION_IMPL* session, WT_PAGE* page)
 	/*从最底层删除OVFL_TXNC对象*/
 	decr = 0;
 	for (e = &head[0]; (txnc = *e) != NULL;) {
-		if (TXNID_LE(oldest_txn, txnc->current)) {
+		if (TXNID_LE(oldest_txn, txnc->current)) { /*可能还有事务在引用这个ovfl item*/
 			e = &txnc->next[0];
 			continue;
 		}
@@ -671,7 +671,8 @@ int __wt_ovfl_track_wrapup(WT_SESSION_IMPL *session, WT_PAGE *page)
 
 /*
 * __wt_ovfl_track_wrapup_err --
-*	Resolve the page's overflow tracking on reconciliation error.
+* Resolve the page's overflow tracking on reconciliation error.
+* 回收reconciliation错误后产生的overflow track对象
 */
 int __wt_ovfl_track_wrapup_err(WT_SESSION_IMPL *session, WT_PAGE *page)
 {

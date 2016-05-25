@@ -1018,6 +1018,7 @@ struct __wt_insert_head {
  * Check that we haven't raced with a split_gen update after publishing: we
  * rely on the published value not being missed when scanning for the oldest
  * active split_gen.
+ * 防止其他的事务线程释放正在recocile的internal page中的ref array空间,这里这样做为了延迟到reconcile完成后在释放引用的ref array空间
  */
 #define	WT_ENTER_PAGE_INDEX(session) do {								\
 	uint64_t __prev_split_gen = (session)->split_gen;					\

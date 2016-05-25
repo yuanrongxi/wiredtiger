@@ -101,8 +101,7 @@ void __wt_txn_refresh(WT_SESSION_IMPL* session, int get_snapshot)
 	do {
 		if ((count = txn_global->scan_count) < 0)
 			WT_PAUSE();
-	} while (count < 0 ||
-		!WT_ATOMIC_CAS4(txn_global->scan_count, count, count + 1));
+	} while (count < 0 || !WT_ATOMIC_CAS4(txn_global->scan_count, count, count + 1));
 
 	/**/
 	prev_oldest_id = txn_global->oldest_id;

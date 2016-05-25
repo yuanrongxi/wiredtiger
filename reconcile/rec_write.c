@@ -307,7 +307,7 @@ int __wt_reconcile(WT_SESSION_IMPL* session, WT_REF* ref, WT_SALVAGE_COOKIE* sal
 	locked = 0;
 	if (conn->compact_in_memory_pass){
 		locked = 1;
-		WT_PAGE_LOCK(session, page);
+		WT_PAGE_LOCK(session, page); /*这个锁是为了防止page中有新的数据添加，如果在reconcile过称重需要进行内存的compact，那么必须防止新的数据添加*/
 	}
 	else{
 		/*将page设置为scanning状态，这里会spin wait，直到设置成功为止,防止在recocile过程出现对update list进行垃圾回收*/
@@ -488,7 +488,7 @@ static int __rec_write_init(WT_SESSION_IMPL* session, WT_REF* ref, uint32_t flag
 		r->cur = &r->_cur;
 		r->last = &r->_last;
 
-		/*磁盘写需要对齐写入，设置对齐标示*/
+		/*dsk buffer需要对齐写入，设置对齐标示*/
 		F_SET(&r->dsk, WT_ITEM_ALIGNED);
 	}
 
@@ -501,7 +501,7 @@ static int __rec_write_init(WT_SESSION_IMPL* session, WT_REF* ref, uint32_t flag
 
 	/* Raw compression. */
 	r->raw_compression = __rec_raw_compression_config(session, page, salvage);
-	r->raw_destination.flags = WT_ITEM_ALIGNED;
+	r->raw_destination.flags = WT_ITEM_ALIGNED; /*压缩后的buffer必须是磁盘写入对其的长度,因为压缩后的数据要落盘*/
 
 	/* Track overflow items. */
 	r->ovfl_items = 0;
@@ -546,6 +546,7 @@ static int __rec_write_init(WT_SESSION_IMPL* session, WT_REF* ref, uint32_t flag
 	/*
 	* Running transactions may update the page after we write it, so
 	* this is the highest ID we can be confident we will see.
+	* 保存当前正在执行的事务中最早启动的事务ID，防止这个事务后面的事务修改的数据被recocile的磁盘上
 	*/
 	r->skipped_txn = S2C(session)->txn_global.last_running;
 
@@ -1084,6 +1085,20 @@ static int __rec_split_bnd_grow(WT_SESSION_IMPL* session, WT_RECONCILE* r)
 	return 0;
 }
 
+/*计算行存储时page分裂的大小*/
+uint32_t __wt_split_page_size(WT_BTREE* btree, uint32_t maxpagesize)
+{
+	uintmax_t a;
+	uint32_t split_size;
+
+	a = maxpagesize;
+	split_size = (uint32_t)WT_ALIGN((a * (u_int)btree->split_pct) / 100, btree->allocsize); /*btree->split_pct是page分裂阈值的百分比，每次分裂的时候都分裂成最大size的这个百分数大小*/
+	if (split_size == btree->allocsize)
+		split_size = (uint32_t)((a * (u_int)btree->split_pct) / 100);
+
+	return split_size;
+}
+
 /*初始化reconciliation的split操作*/
 static int __rec_split_init(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page, uint64_t recno, uint32_t max)
 {
@@ -1120,6 +1135,7 @@ static int __rec_split_init(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* 
 	memset(dsk, 0, WT_PAGE_HEADER_BYTE_SIZE(btree));
 	dsk->type = page->type;
 
+	/*计算page分裂后的大小*/
 	if (r->raw_compression || r->salvage != NULL){
 		r->split_size = 0;
 		r->space_avail = r->page_size - WT_PAGE_HEADER_BYTE_SIZE(btree);

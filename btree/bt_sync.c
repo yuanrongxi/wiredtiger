@@ -32,7 +32,7 @@ static int __sync_file(WT_SESSION_IMPL* session, int syncop)
 
 	switch (syncop){
 	case WT_SYNC_WRITE_LEAVES:
-		/* 将所有可以写入磁盘的脏页落盘 */
+		/* 将所有可以写入磁盘的脏页落盘,只刷入leaf page的数据入盘 */
 		if (!btree->modified)
 			return 0;
 		__wt_spin_lock(session, &btree->flush_lock);
@@ -48,7 +48,7 @@ static int __sync_file(WT_SESSION_IMPL* session, int syncop)
 			if (walk == NULL)
 				break;
 
-			/* 将无操作的脏写入磁盘，但不对热数据page做写入 */
+			/* 将无操作的脏写入磁盘，如果有的更新在刷盘事务之后产生，那么这个更新的page不做刷盘操作*/
 			if (__wt_page_is_modified(page) && __wt_txn_visible_all(session, page->modify->update_txn)){
 				if (txn->isolation == TXN_ISO_READ_COMMITTED)
 					__wt_txn_refresh(session, 1);
