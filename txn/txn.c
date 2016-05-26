@@ -244,7 +244,7 @@ void __wt_txn_release(WT_SESSION_IMPL* session)
 	txn_global = &S2C(session)->txn_global;
 	txn_state = &txn_global->states[session->id];
 
-	/* 清除全局事务队列中的事务ID */
+	/* 清除全局事务队列中的事务ID,将事务设置为提交状态 */
 	if(F_ISSET(txn, TXN_HAS_ID)){
 		WT_ASSERT(session, txn_state->id != WT_TXN_NONE && txn->id != WT_TXN_NONE);
 		WT_PUBLISH(txn_state->id, WT_TXN_NONE);
@@ -283,7 +283,7 @@ int __wt_txn_commit(WT_SESSION_IMPL *session, const char *cfg[])
 	if(!F_ISSET(txn, TXN_RUNNING))
 		WT_RET_MSG(session, EINVAL, "No transaction is active");
 
-	/*通知双层DBMS进入事务提交状态*/
+	/*通知上层DBMS进入事务提交状态*/
 	if(txn->notify != NULL)
 		WT_TRET(txn->notify->notify(txn->notify, (WT_SESSION *)session, txn->id, 1));
 
