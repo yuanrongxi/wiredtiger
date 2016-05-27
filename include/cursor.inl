@@ -130,7 +130,7 @@ static inline int __cursor_func_init(WT_CURSOR_BTREE* cbt, int reenter)
 	if(!F_ISSET(cbt, WT_CBT_ACTIVE)){
 		WT_RET(__curfile_enter(cbt));
 	}
-
+	/*为一个readcommited事务更新snapshot，让已提交的事务修改的数据对本事务可见*/
 	__wt_txn_cursor_op(session);
 
 	return 0;
