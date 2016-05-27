@@ -633,6 +633,9 @@
     <ClCompile Include="support\global.c">
       <Filter>c\support</Filter>
     </ClCompile>
+    <ClCompile Include="test\readcommited.c">
+      <Filter>test</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\connection.h">

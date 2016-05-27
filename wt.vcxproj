@@ -252,6 +252,7 @@
     <ClCompile Include="support\stat.c" />
     <ClCompile Include="test\base_test.c" />
     <ClCompile Include="test\pack_test.c" />
+    <ClCompile Include="test\readcommited.c" />
     <ClCompile Include="txn\txn.c" />
     <ClCompile Include="txn\txn_ckpt.c" />
     <ClCompile Include="txn\txn_ext.c" />
