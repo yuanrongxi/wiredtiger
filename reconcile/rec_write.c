@@ -925,7 +925,7 @@ static inline void __rec_incr(WT_SESSION_IMPL* session, WT_RECONCILE* r, uint32_
 	WT_ASSERT(session, WT_BLOCK_FITS(r->first_free, size, r->dsk.mem, r->dsk.memsize));
 
 	r->entries += v;
-	r->space_avail += size;
+	r->space_avail -= size;
 	r->first_free += size; /*更新空闲位置*/
 }
 
@@ -3056,7 +3056,7 @@ static int __rec_row_merge(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* p
 	key = &r->k;
 	val = &r->v;
 
-	/**/
+	/*将孩子page分裂后的key和block addr作为k/v reconcile到internal page block当中*/
 	for (multi = mod->mod_multi, i = 0; i < mod->mod_multi_entries; ++multi, ++i){
 		WT_RET(__rec_cell_build_int_key(session, r, WT_IKEY_DATA(multi->key.ikey), r->cell_zero ? 1 : multi->key.ikey->size, &ovfl_key));
 		r->cell_zero = 0;
