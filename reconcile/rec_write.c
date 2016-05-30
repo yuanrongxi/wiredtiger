@@ -3259,7 +3259,7 @@ static int __rec_row_leaf(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_PAGE *pa
 				WT_ERR(__wt_ovfl_cache(session, page, rip, vpack));
 
 			/* If this key/value pair was deleted, we're done. */
-			if (WT_UPDATE_DELETED_ISSET(upd)) {
+			if (WT_UPDATE_DELETED_ISSET(upd)) { /*处理记录删除的reconcile*/
 				/*
 				* Overflow keys referencing discarded values
 				* are no longer useful, discard the backing
@@ -3577,6 +3577,7 @@ static int __rec_write_wrapup(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_PAGE
 	* is now about to be replaced.  Make sure it's discarded at some point,
 	* and clear the underlying modification information, we're creating a
 	* new reality.
+	* 废弃在reconcile之前page对应的block
 	*/
 	switch (F_ISSET(mod, WT_PM_REC_MASK)) {
 	case 0:	/*
@@ -3639,6 +3640,7 @@ static int __rec_write_wrapup(WT_SESSION_IMPL *session, WT_RECONCILE *r, WT_PAGE
 	*/
 	WT_RET(__wt_ovfl_track_wrapup(session, page));
 
+	/*设置page新的modify block addr*/
 	switch (r->bnd_next) {
 	case 0:						/* Page delete */
 		WT_RET(__wt_verbose(session, WT_VERB_RECONCILE, "page %p empty", page));

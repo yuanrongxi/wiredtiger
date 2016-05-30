@@ -1115,7 +1115,9 @@ err:
 }
 
 /* Resolve a failed reconciliation by replacing a page with a new version.
- * 其实就是将ref对应的page上modify 的数据转移到btree树上,废除ref指向的page,重新指向新page的位置， 新page是存储modify数据的page
+ * 是将reconcile过程中对一个内存占用较大的page进行分裂尝试后，发现这个PAGE并没有超出分裂的阈值，
+ * 那么就需要对这个page做一次重整，让其内存占用在一个合理的位置，这里会涉及到删除数据的清除等.
+ * 整个重整过程是copy on write,会构建一个新的内存page版本
  */
 int __wt_split_rewrite(WT_SESSION_IMPL* session, WT_REF* ref)
 {
@@ -1141,6 +1143,7 @@ int __wt_split_rewrite(WT_SESSION_IMPL* session, WT_REF* ref)
 	memset(&new, 0, sizeof(new));
 	WT_RET(__split_multi_inmem(session, page, &new, &mod->mod_multi[0]));
 
+	/*将原来占用较大内存的page对象释放删除，将ref指向到新重整的page对象上*/
 	mod->write_gen = 0;
 	__wt_cache_dirty_decr(session, page);
 	__wt_ref_out(session, ref);
