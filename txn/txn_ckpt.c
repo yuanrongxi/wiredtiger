@@ -18,7 +18,7 @@ int __wt_checkpoint_name_ok(WT_SESSION_IMPL *session, const char *name, size_t l
 	WT_RET_MSG(session, EINVAL, "the checkpoint name \"%s\" is reserved", WT_CHECKPOINT);
 }
 
-/*检查uri是否能对checkpoint命名？？*/
+/*检查uri是否能对checkpoint命名，这里要判断的是uri是否按照固定的格式来进行命名，如果不是，返回非零值*/
 static int __checkpoint_name_check(WT_SESSION_IMPL* session, const char* uri)
 {
 	WT_CURSOR *cursor;
@@ -66,7 +66,8 @@ err:
 
 /*
  * __checkpoint_apply_all --
- *	Apply an operation to all files involved in a checkpoint.
+ * Apply an operation to all files involved in a checkpoint.
+ * 将一个上层指定的操作在所有相关的索引文件对象中进行执行，一般是涉及到schema的修改 
  */
 static int __checkpoint_apply_all(WT_SESSION_IMPL* session, const char* cfg[], int (*op)(WT_SESSION_IMPL *, const char *[]), int *fullp)
 {

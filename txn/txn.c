@@ -97,7 +97,7 @@ void __wt_txn_refresh(WT_SESSION_IMPL* session, int get_snapshot)
 			return;
 	}
 
-	/*等待*/
+	/*等待其他线程完成对oldest update id的设置*/
 	do {
 		if ((count = txn_global->scan_count) < 0)
 			WT_PAUSE();
@@ -129,7 +129,7 @@ void __wt_txn_refresh(WT_SESSION_IMPL* session, int get_snapshot)
 		if(get_snapshot && s == txn_state)
 			continue;
 
-		/*确定oldest id和oldest session，因为整个过程其他线程可能同时在scan*/
+		/*确定oldest id和oldest session，这个做法是兼容其他的read uncommited类型事务在操作开始之前会进行snap_min的刷新,所以这里在判断的时候，需要对这个情况进行判定*/
 		if((id = s->snap_min) != WT_TXN_NONE && TXNID_LT(id, oldest_id)){
 			oldest_id = id;
 			oldest_session = i;

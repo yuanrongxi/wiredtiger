@@ -14,8 +14,8 @@
 
 struct WT_COMPILER_TYPE_ALIGN(WT_CACHE_LINE_ALIGNMENT) __wt_txn_state
 {
-	volatile uint64_t id;
-	volatile uint64_t snap_min;
+	volatile uint64_t id;			/*执行事务的事务ID*/
+	volatile uint64_t snap_min;		/*执行事务在建立snapshot时最早产生的且未提交的事务ID*/
 };
 
 /*全局事务管理对象*/
@@ -29,7 +29,7 @@ struct __wt_txn_global
 	/*
 	* The oldest transaction ID that is not yet visible to some
 	* transaction in the system.
-	* oldest_id对系统中所有的事务可见
+	* oldest_id对系统中所有的事务不一定都可见
 	*/
 	volatile uint64_t	oldest_id;
 
