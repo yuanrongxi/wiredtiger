@@ -105,7 +105,7 @@ static int __curlog_op_read(WT_SESSION_IMPL* session, WT_CURSOR_LOG* cl, uint32_
 	return (0);
 }
 
-/*将cursor对应的logrec中的数据读取出来(key = lsn + stepcount, value = optype + trx_id + fieldid + opvalue等)，
+/*将cursor对应的logrec中的数据读取出来(key = lsn + stepcount, value = optype + recsize + fieldid + opvalue等)，
   并构造KEY和value，获得对应的KV对，最后设置到cursor->key/value当中*/
 static int __curlog_kv(WT_SESSION_IMPL* session, WT_CURSOR* cursor)
 {
@@ -178,7 +178,7 @@ static int __curlog_kv(WT_SESSION_IMPL* session, WT_CURSOR* cursor)
 }
 
 /*日志cursor读取的next操作*/
-static __curlog_next(WT_CURSOR* cursor)
+static int __curlog_next(WT_CURSOR* cursor)
 {
 	WT_CURSOR_LOG *cl;
 	WT_DECL_RET;
