@@ -1381,10 +1381,10 @@ static int __log_write_internal(WT_SESSION_IMPL* session, WT_ITEM* record, WT_LS
 		__wt_spin_unlock(session, &log->log_slot_lock);
 		locked = 0;
 
-		/*将slot置为writting状态，并设置需要写的数据长度*/
+		/*将slot置为writting状态，并设置需要写的数据长度,这里告诉其他线程停止等待，可以开始填充日志数据*/
 		WT_ERR(__wt_log_slot_notify(session, myslot.slot));
 	} 
-	else/*说明slot的第一个位置的write操作还未开始，需要进行等待第一个操作开始，才能进行*/
+	else/*说明slot的第一个位置的write操作还未开始(等待__wt_log_slot_notify)，需要进行等待第一个操作开始，才能进行*/
 		WT_ERR(__wt_log_slot_wait(session, myslot.slot));
 
 	/*将数据写入到slot buffer中，这个操作可以多线程同时进行,因为各自的位置是不重叠的,这个时候数据并没有落盘*/

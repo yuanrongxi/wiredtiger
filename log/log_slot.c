@@ -88,7 +88,7 @@ find_slot:
 	old_state = slot->slot_state;
 
 join_slot:
-	if(old_state < WT_LOG_SLOT_READY){ /*表示这个slot已经处于不可选取状态，必须重新选择。因为在find_slot的过程有可能有多个线程同时find_slot,整个重选过程相当于spin*/
+	if(old_state < WT_LOG_SLOT_READY){ /*表示这个slot已经处于不可选取状态，必须重新选择。因为选取的slot已经关闭了申请方式*/
 		WT_STAT_FAST_CONN_INCR(session, log_slot_transitions);
 		goto find_slot;
 	}

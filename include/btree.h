@@ -54,7 +54,7 @@ struct __wt_btree
 	WT_COLLATOR*			collator;			/*行存储时的比较器*/
 	int						collator_owned;		/*如果这个值为1，表示比较器需要进行free*/
 
-	uint32_t				id;					/*log file ID*/
+	uint32_t				id;					/*btree索引文件ID,主要用于redo log的推演*/
 
 	uint32_t				key_gap;			/*行存储时的key前缀范围长度*/
 
