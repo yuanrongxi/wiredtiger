@@ -62,7 +62,6 @@ static inline void __evict_list_clear(WT_SESSION_IMPL* session, WT_EVICT_ENTRY* 
 	e->btree = WT_DEBUG_POINT;
 }
 
-
 /*
  *
  *	Make sure a page is not in the LRU eviction list.  This called from the
@@ -84,7 +83,7 @@ void __wt_evict_list_clear_page(WT_SESSION_IMPL *session, WT_REF *ref)
 		return;
 
 	cache = S2C(session)->cache;
-	__wt_spin_lock(session, cache->evict_lock);
+	__wt_spin_lock(session, &cache->evict_lock);
 
 	elem = cache->evict_max;
 	for (i = 0, evict = cache->evict; i < elem; i++, evict++){
@@ -94,7 +93,7 @@ void __wt_evict_list_clear_page(WT_SESSION_IMPL *session, WT_REF *ref)
 		}
 	}
 
-	__WT_ASSERT(session, !F_ISSET_ATOMIC(ref->page, WT_PAGE_EVICT_LRU));
+	WT_ASSERT(session, !F_ISSET_ATOMIC(ref->page, WT_PAGE_EVICT_LRU));
 
 	__wt_spin_unlock(session, &cache->evict_lock);
 }
