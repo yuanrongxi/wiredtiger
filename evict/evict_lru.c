@@ -15,7 +15,7 @@ static int				__evict_walk_file(WT_SESSION_IMPL *, u_int *, uint32_t);
 static WT_THREAD_RET	__evict_worker(void *);
 static int				__evict_server_work(WT_SESSION_IMPL *);
 
-
+/*确定一个evict entry的evict的优先级*/
 static inline uint64_t __evict_read_gen(const WT_EVICT_ENTRY* entry)
 {
 	WT_PAGE*	page;
@@ -416,11 +416,11 @@ static int __evict_pass(WT_SESSION_IMPL* session)
 		/*假如cache设置了clear walks标示，那么在清除完全填充的cache WALKS之前需要做一次检查*/
 		if (F_ISSET(cache, WT_CACHE_CLEAR_WALKS)){
 			F_CLR(cache, WT_CACHE_CLEAR_WALKS);
-			WT_RET(__evict_clear_walks(session));
+			WT_RET(__evict_clear_walks(session)); /*淘汰connection所有session中的evict_ref的page*/
 			WT_RET(__wt_cond_signal(session, cache->evict_waiter_cond));
 		}
 
-		/*获得evict flags,检查是否需要evict page出内存*/
+		/*获得evict flags,检查是否需要evict page出内存,确定evict操作的类型*/
 		WT_RET(__evict_has_work(session, &flags));
 		if (flags == 0)
 			break;
@@ -706,14 +706,14 @@ static int __evict_server_work(WT_SESSION_IMPL* session)
 		if (cache->evict_candidates > 10 && cache->evict_current != NULL)
 			__wt_yield();
 	}
-	else
+	else /*没有evict worker线程，直接用server线程进行evict操作*/
 		WT_RET_NOTFOUND_OK(__evict_lru_pages(session, 1));
 
 	return 0;
 }
 
-/*  */
-static int _evict_walk(WT_SESSION_IMPL *session, uint32_t flags)
+/*扫描整个connection中打开的btree索引文件，将能evict的btree page放入evict lru队列当中*/
+static int __evict_walk(WT_SESSION_IMPL *session, uint32_t flags)
 {
 	WT_BTREE *btree;
 	WT_CACHE *cache;
@@ -765,7 +765,7 @@ retry:
 				if (spins < 1000)
 					__wt_yield();
 				else
-					__wt_sleep(0, 1000)
+					__wt_sleep(0, 1000);
 			}
 			if (ret != 0)
 				break;
@@ -803,6 +803,7 @@ retry:
 		/*
 		* Also skip files that are checkpointing or configured to
 		* stick in cache until we get aggressive.
+		* 正在建立checkpoint的btree不做普通的evict操作
 		*/
 		if ((btree->checkpointing || btree->evict_priority != 0) && !LF_ISSET(WT_EVICT_PASS_AGGRESSIVE))
 			continue;
@@ -832,6 +833,7 @@ retry:
 		}
 		__wt_spin_unlock(session, &cache->evict_walk_lock);
 
+		/*本次walk并没有设置这个BTREE的页作为驱逐对象，那么下次减少evict walk的概率，因为walk btree是很好资源的*/
 		if (slot == prev_slot)
 			btree->evict_walk_period = WT_MIN(WT_MAX(1, 2 * btree->evict_walk_period), 100);
 		else
@@ -1056,7 +1058,7 @@ static int _evict_get_ref(WT_SESSION_IMPL *session, int is_server, WT_BTREE **bt
 		__wt_yield();
 	}
 
-	/*先evict out 一半数量的page??*/
+	/*如果是evict server thread的话，先evict out 一半数量的page*/
 	candidates = cache->evict_candidates;
 	if (is_server && candidates > 1)
 		candidates /= 2;

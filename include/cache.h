@@ -15,9 +15,9 @@
 #define WT_EVICT_WALK_INCR		100			/* Pages added each walk */
 
 #define	WT_EVICT_PASS_AGGRESSIVE	0x01
-#define	WT_EVICT_PASS_ALL			0x02
-#define	WT_EVICT_PASS_DIRTY			0x04
-#define	WT_EVICT_PASS_WOULD_BLOCK	0x08
+#define	WT_EVICT_PASS_ALL			0x02	/*清除所有的evict entry*/
+#define	WT_EVICT_PASS_DIRTY			0x04	/*清除所有有脏数据的page的evict entry*/
+#define	WT_EVICT_PASS_WOULD_BLOCK	0x08	/*清除最小read_gen的evict entry*/
 
 /*对一个evition对象的封装*/
 struct __wt_evict_entry
