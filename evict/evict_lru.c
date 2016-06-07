@@ -702,6 +702,8 @@ static int __evict_server_work(WT_SESSION_IMPL* session)
 		/*
 		* If there are candidates queued, give other threads a chance
 		* to access them before gathering more.
+		* 这里调用sched_yield是为了在CPU密集计算时，evict server 让出CPU资源给
+		* evict work thread执行evict操作，防止evict queue中堆积过多等待evict的实例
 		*/
 		if (cache->evict_candidates > 10 && cache->evict_current != NULL)
 			__wt_yield();
@@ -833,7 +835,7 @@ retry:
 		}
 		__wt_spin_unlock(session, &cache->evict_walk_lock);
 
-		/*本次walk并没有设置这个BTREE的页作为驱逐对象，那么下次减少evict walk的概率，因为walk btree是很好资源的*/
+		/*本次walk并没有设置这个BTREE的页作为驱逐对象，那么下次减少evict walk的概率，因为walk btree是耗费资源的*/
 		if (slot == prev_slot)
 			btree->evict_walk_period = WT_MIN(WT_MAX(1, 2 * btree->evict_walk_period), 100);
 		else
