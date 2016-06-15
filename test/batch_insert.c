@@ -17,10 +17,11 @@ typedef struct{
 }item_t;
 
 static int wcount = 0;
+int total_count = 0;
 WT_CONNECTION *conn;
 
-#define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB"
-#define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB"
+#define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB,os_cache_max=1GB"
+#define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB,os_cache_max=1GB"
 
 static int setup(db_info_t* info, int create_table)
 {
@@ -65,8 +66,6 @@ static void* write_thr(void* arg)
 	int ret;
 	item_t* item = arg;
 
-	srand(time(NULL));
-
 	if (setup(&db, 0) != 0){
 		printf("write thread setup db failed!\n");
 		return NULL;
@@ -82,10 +81,52 @@ static void* write_thr(void* arg)
 	}
 
 	clean(&db);
+
+	return NULL;
 }
 
 #define COUNT		1000000
 #define THREAD_NUM	8
+#define READ_COUNT  1000
+
+static void* read_thr(void* arg)
+{
+	db_info_t db = { NULL, NULL };
+	uint32_t key;
+	char value[1024] = { 0 };
+	int ret, i;
+	int per_count;
+	char *val;
+	struct timeval e;
+	gettimeofday(&e, NULL);
+
+	srand(e.tv_usec);
+
+	if (setup(&db, 0) != 0){
+		printf("write thread setup db failed!\n");
+		return NULL;
+	}
+
+	for (i = 0; i < READ_COUNT; i++){
+		per_count = total_count / READ_COUNT;
+		key = rand() % per_count + i * per_count;
+
+		db.cursor->reset(db.cursor);
+		db.cursor->set_key(db.cursor, key);
+		ret = db.cursor->search(db.cursor);
+		if (ret == 0){
+			ret = db.cursor->get_key(db.cursor, &key);
+			ret = db.cursor->get_value(db.cursor, &val);
+		}
+		else
+			printf("search failed!\n");
+	}
+
+	clean(&db);
+
+	return NULL;
+}
+
 
 #define WT_CONFIG "create,cache_size=1GB,log=(archive=,compressor=,enabled=false,file_max=200MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so]"
 
@@ -96,7 +137,6 @@ int main(int argc, const char* argv[])
 	char value[1024] = { 0 };
 	char *val;
 	int ret;
-	int total_count = 0;
 	int per_count = 0;
 
 	int i;
@@ -136,6 +176,8 @@ int main(int argc, const char* argv[])
 	for (i = 0; i < THREAD_NUM; i++)
 		pthread_join(ids[i], NULL);
 
+	printf("insert finished!\n");
+
 	if ((ret = db.session->checkpoint(db.session, NULL)) != 0)
 		printf("create checkpiont failed!\n");
 	else
@@ -145,26 +187,20 @@ int main(int argc, const char* argv[])
 	delay = 1000 * (e.tv_sec - b.tv_sec) + (e.tv_usec - b.tv_usec) / 1000;
 	printf("inerst row count = %u, delay = %u\n", total_count, delay);
 
+	getchar();
+
 	gettimeofday(&b, NULL);
-
-	for (i = 0; i < 1000; i++){
-		per_count = total_count / 1000;
-		key = rand() % per_count + i * per_count;
-
-		db.cursor->reset(db.cursor);
-		db.cursor->set_key(db.cursor, key);
-		ret = db.cursor->search(db.cursor);
-		if (ret == 0){
-			ret = db.cursor->get_key(db.cursor, &key);
-			ret = db.cursor->get_value(db.cursor, &val);
-		}
-		else
-			printf("search failed!\n");
+	for (i = 0; i < THREAD_NUM; i++){
+		pthread_create(ids + i, NULL, read_thr, NULL);
 	}
+	for (i = 0; i < THREAD_NUM; i++)
+		pthread_join(ids[i], NULL);
 
 	gettimeofday(&e, NULL);
 	delay = 1000 * (e.tv_sec - b.tv_sec) + (e.tv_usec - b.tv_usec) / 1000;
-	printf("search 100, delay = %u\n", delay);
+	printf("query tps = %u\n", (THREAD_NUM * READ_COUNT) * 1000 / delay);
+
+	getchar();
 
 	clean(&db);
 
