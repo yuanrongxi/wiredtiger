@@ -417,7 +417,7 @@ static inline void __wt_row_leaf_key_set_cell(WT_PAGE* page, WT_ROW* rip, WT_CEL
 	WT_ROW_KEY_SET(rip, v);
 }
 
-/*根据row K_	FLAG和unpack信息设置成row KV_FLAG信息*/
+/*根据row K_FLAG和unpack信息设置成row KV_FLAG信息*/
 static inline void __wt_row_leaf_value_set(WT_PAGE* page, WT_ROW* rip, WT_CELL_UNPACK* unpack)
 {
 	uintptr_t key_len, key_offset, value_offset, v;
