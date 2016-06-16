@@ -86,8 +86,8 @@ static void* write_thr(void* arg)
 }
 
 #define COUNT		1000000
-#define THREAD_NUM	8
-#define READ_COUNT  1000
+#define THREAD_NUM	16
+#define READ_COUNT  20000
 
 static void* read_thr(void* arg)
 {
