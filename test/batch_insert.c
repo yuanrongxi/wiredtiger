@@ -21,7 +21,7 @@ int total_count = 0;
 WT_CONNECTION *conn;
 
 #define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB,os_cache_max=1GB"
-#define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB,os_cache_max=1GB"
+#define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB,os_cache_max=1GB,huffman_value=english"
 
 static int setup(db_info_t* info, int create_table)
 {
