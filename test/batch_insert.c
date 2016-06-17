@@ -17,7 +17,7 @@ typedef struct{
 }item_t;
 
 static int wcount = 0;
-int total_count = 0;
+uint64_t total_count = 0;
 WT_CONNECTION *conn;
 
 #define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB,os_cache_max=1GB"
@@ -185,7 +185,7 @@ int main(int argc, const char* argv[])
 
 	gettimeofday(&e, NULL);
 	delay = 1000 * (e.tv_sec - b.tv_sec) + (e.tv_usec - b.tv_usec) / 1000;
-	printf("inerst row count = %u, delay = %u\n", total_count, delay);
+	printf("inerst row count = %u, insert tps = %u\n", total_count, total_count*1000/delay);
 
 	getchar();
 
