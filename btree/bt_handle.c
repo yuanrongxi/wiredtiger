@@ -32,7 +32,7 @@ int __wt_btree_open(WT_SESSION_IMPL *session, const char *op_cfg[])
 	readonly = (dhandle->checkpoint == NULL ? 0 : 1);
 	/*获得checkpoint信息*/
 	WT_CLEAR(ckpt);
-	WT_RET(__wt_meta_checkpoint(session, dhandle->name, dhandle->checkpoint, *ckpt));
+	WT_RET(__wt_meta_checkpoint(session, dhandle->name, dhandle->checkpoint, &ckpt));
 
 	/*判断是否是新建一个btree*/
 	creation = (ckpt.raw.size == 0);
