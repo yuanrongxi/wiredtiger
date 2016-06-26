@@ -5,11 +5,11 @@
 
 static int __lsm_merge_span(WT_SESSION_IMPL* session, WT_LSM_TREE* lsm_tree, u_int, u_int* , u_int* , uint64_t*);
 
-
+/*merge后调整chunk数组的布局*/
 int __wt_lsm_merge_update_tree(WT_SESSION_IMPL *session, WT_LSM_TREE *lsm_tree, u_int start_chunk, u_int nchunks, WT_LSM_CHUNK *chunk)
 {
 	size_t chunks_after_merge;
-
+	/*将被merge的chunk先移入old chunks用于drop回收*/
 	WT_RET(__wt_lsm_tree_retire_chunks(session, lsm_tree, start_chunk, nchunks));
 
 	chunks_after_merge = lsm_tree->nchunks - (nchunks + start_chunk);
@@ -217,7 +217,7 @@ int __wt_lsm_merge(WT_SESSION_IMPL *session, WT_LSM_TREE *lsm_tree, u_int id)
 	WT_ERR(__wt_open_cursor(session, lsm_tree->name, NULL, NULL, &src));
 	F_SET(src, WT_CURSTD_RAW);
 	WT_ERR(__wt_clsm_init_merge(src, start_chunk, start_id, nchunks));
-
+	/*获取merge chunk的meta配置信息*/
 	WT_WITH_SCHEMA_LOCK(session, ret = __wt_lsm_tree_setup_chunk(session, lsm_tree, chunk));
 
 	WT_ERR(ret);
@@ -238,7 +238,7 @@ int __wt_lsm_merge(WT_SESSION_IMPL *session, WT_LSM_TREE *lsm_tree, u_int id)
 	WT_ERR(__wt_open_cursor(session, chunk->uri, NULL, cfg, &dest));
 
 #define LSM_MERGE_CHECK_INTERVAL 1000
-
+	/*merge过程*/
 	for(insert_count = 0; (ret = src->next(src)) == 0; insert_count ++){
 		if (insert_count % LSM_MERGE_CHECK_INTERVAL == 0) {
 			if (!F_ISSET(lsm_tree, WT_LSM_TREE_ACTIVE))
