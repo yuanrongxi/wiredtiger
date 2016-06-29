@@ -150,7 +150,7 @@ int __wt_lsm_manager_start(WT_SESSION_IMPL *session)
 
 	manager = &S2C(session)->lsm_manager;
 
-	/*至少3个线程，1个manager线程，1个swtich线程和一个通用的操作线程*/
+	/*至少3个线程，1个manager线程，1个switch线程和一个通用的操作线程*/
 	WT_ASSERT(session, manager->lsm_workers_max > 2);
 
 	/*创建一个session,主要用于lsm worker的参数,相当于初始化worker args*/
@@ -261,7 +261,7 @@ static int __lsm_manager_aggressive_update(WT_SESSION_IMPL* session, WT_LSM_TREE
 	uint64_t chunk_wait, stallms;
 	u_int new_aggressive;
 
-	/*计算flush间隔时间*/
+	/*计算flush间隔时间,单位毫秒*/
 	WT_RET(__wt_epoch(session, &now));
 	stallms = WT_TIMEDIFF(now, lsm_tree->last_flush_ts) / WT_MILLION;
 

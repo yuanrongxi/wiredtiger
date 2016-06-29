@@ -49,7 +49,7 @@ typedef enum
 	}											\
 }while(0)					
 
-/*计算时间差，单位为微秒*/
+/*计算时间差，单位为纳秒*/
 #define	WT_TIMEDIFF(end, begin)									\
 	(1000000000 * (uint64_t)((end).tv_sec - (begin).tv_sec) +	\
 	(uint64_t)(end).tv_nsec - (uint64_t)(begin).tv_nsec)
