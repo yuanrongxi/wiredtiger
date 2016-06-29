@@ -8,7 +8,7 @@ static int __lsm_tree_open_check(WT_SESSION_IMPL *, WT_LSM_TREE *);
 static int __lsm_tree_open(WT_SESSION_IMPL *, const char *, WT_LSM_TREE **);
 static int __lsm_tree_set_name(WT_SESSION_IMPL *, WT_LSM_TREE *, const char *);
 
-
+/*释放内存中的lsm tree对象*/
 static int __lsm_tree_discard(WT_SESSION_IMPL* session, WT_LSM_TREE* lsm_tree, int final)
 {
 	WT_DECL_RET;
@@ -17,7 +17,7 @@ static int __lsm_tree_discard(WT_SESSION_IMPL* session, WT_LSM_TREE* lsm_tree, i
 
 	WT_UNUSED(final);
 
-	/**/
+	/*从connection中的lsm queue中移除对象，防止其他事务引用*/
 	if(F_ISSET(lsm_tree, WT_LSM_TREE_OPEN)){
 		/*必须持有session handler list lock*/
 		WT_ASSERT(session, final || F_ISSET(session, WT_SESSION_HANDLE_LIST_LOCKED));
@@ -76,7 +76,7 @@ static int __lsm_tree_close(WT_SESSION_IMPL* session, WT_LSM_TREE* lsm_tree)
 	F_CLR(lsm_tree, WT_LSM_TREE_ACTIVE);
 
 	/*反复进行尝试，直到lsm tree没有其他模块引用为止*/
-	for(i = 0; lsm_tree->refcnt> 1 || lsm_tree->queue_ref > 0; ++i){
+	for(i = 0; lsm_tree->refcnt > 1 || lsm_tree->queue_ref > 0; ++i){
 		/*相当于spin wait*/
 		if (i % 1000 == 0) {
 			/*从任务队列中清除掉正在等待处理这个lsm tree的任务,例如flush/drop file等 */
@@ -90,7 +90,7 @@ static int __lsm_tree_close(WT_SESSION_IMPL* session, WT_LSM_TREE* lsm_tree)
 	return 0;
 }
 
-/*撤销（先关闭，后释放）所有的lsm tree 对象*/
+/*撤销（先关闭，后释放）所有的lsm tree 对象, 一般用于停服时调用*/
 int __wt_lsm_tree_close_all(WT_SESSION_IMPL* session)
 {
 	WT_DECL_RET;
@@ -265,8 +265,7 @@ int __wt_lsm_tree_create(WT_SESSION_IMPL *session, const char *uri, int exclusiv
 	else
 		F_CLR(lsm_tree, WT_LSM_TREE_THROTTLE);
 	WT_ERR(__wt_config_gets(session, cfg, "lsm.bloom", &cval));
-	FLD_SET(lsm_tree->bloom,
-		(cval.val == 0 ? WT_LSM_BLOOM_OFF : WT_LSM_BLOOM_MERGED));
+	FLD_SET(lsm_tree->bloom, (cval.val == 0 ? WT_LSM_BLOOM_OFF : WT_LSM_BLOOM_MERGED));
 	WT_ERR(__wt_config_gets(session, cfg, "lsm.bloom_oldest", &cval));
 	if (cval.val != 0)
 		FLD_SET(lsm_tree->bloom, WT_LSM_BLOOM_OLDEST);
@@ -336,6 +335,7 @@ err:
 	return ret;
 }
 
+/*通过lsm tree的uri name找到对应的lsm的内存对象*/
 static int __lsm_tree_find(WT_SESSION_IMPL *session, const char *uri, int exclusive, WT_LSM_TREE **treep)
 {
 	WT_LSM_TREE *lsm_tree;
@@ -360,6 +360,7 @@ static int __lsm_tree_find(WT_SESSION_IMPL *session, const char *uri, int exclus
 				}
 			}
 			else{
+				/*增加引用计数*/
 				(void)WT_ATOMIC_ADD4(lsm_tree->refcnt, 1);
 
 				/*如果在此刻又设置排他属性，放弃查询并返回忙*/
@@ -385,7 +386,9 @@ static int __lsm_tree_open_check(WT_SESSION_IMPL *session, WT_LSM_TREE *lsm_tree
 
 	WT_RET(__wt_config_gets(session, cfg, "leaf_page_max", &cval));
 	maxleafpage = (uint64_t)cval.val;
-
+	/*
+	 * Three chunks, plus one page for each participant in up to three concurrent merges.
+	 */
 	required = 3 * lsm_tree->chunk_size + 3 * (lsm_tree->merge_max * maxleafpage);
 	if(S2C(session)->cache_size < required){ /*超出设置的cache size，打印一个错误信息，并返回一个错误值*/
 		WT_RET_MSG(session, EINVAL,
@@ -514,7 +517,7 @@ void __wt_lsm_tree_throttle(WT_SESSION_IMPL *session, WT_LSM_TREE *lsm_tree, int
 			if (ondisk == NULL && ((*cp)->generation == 0 && !F_ISSET(*cp, WT_LSM_CHUNK_STABLE)))
 				ondisk = *cp;
 
-			/*计算没有操作chunk的个数*/
+			/*这个chunk没有进行过merge操作*/
 			if ((*cp)->generation == 0 && !F_ISSET(*cp, WT_LSM_CHUNK_MERGING))
 				++gen0_chunks;
 		}
@@ -657,7 +660,7 @@ int __wt_lsm_tree_retire_chunks(WT_SESSION_IMPL *session, WT_LSM_TREE *lsm_tree,
 	return 0;
 }
 
-/*drop一个lsm tree对象*/
+/*drop一个lsm tree表*/
 int __wt_lsm_tree_drop(WT_SESSION_IMPL* session, const char* name, const char* cfg[])
 {
 	WT_DECL_RET;
@@ -676,7 +679,7 @@ int __wt_lsm_tree_drop(WT_SESSION_IMPL* session, const char* name, const char* c
 	WT_ERR(__lsm_tree_close(session, lsm_tree));
 	/*获得lsm tree的写锁，防止其他任务重新打开*/
 	WT_ERR(__wt_lsm_tree_writelock(session, lsm_tree));
-	Locked = 1;
+	locked = 1;
 
 	for(i = 0; i < lsm_tree->nchunks; i++){
 		chunk = lsm_tree->chunk[i];
