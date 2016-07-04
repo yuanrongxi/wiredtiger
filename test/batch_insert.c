@@ -21,7 +21,7 @@ uint64_t total_count = 0;
 WT_CONNECTION *conn;
 
 #define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB,os_cache_max=1GB"
-#define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB,os_cache_max=1GB,huffman_value=english"
+#define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB,os_cache_max=1GB"
 
 static int setup(db_info_t* info, int create_table)
 {
@@ -33,7 +33,7 @@ static int setup(db_info_t* info, int create_table)
 	}
 
 	if (create_table){
-		info->session->create(info->session, "table:mytable", TAB_META);
+		info->session->create(info->session, "table:mytable", RAW_META);
 	}
 
 	ret = info->session->open_cursor(info->session, "table:mytable", NULL, NULL, &info->cursor);
@@ -73,7 +73,7 @@ static void* write_thr(void* arg)
 
 	for (key = item->start; key < item->end; key++){
 		db.cursor->set_key(db.cursor, key);
-		sprintf(value, "zerokwerii939kdd,cgrfkg-@$$$**%u&XXZZamvbzc44k445i0915323/=-d2224===++--dkeiwnd,.,.,aamggnvcxvzczz|<>!-slsdshssrq2934745755mbikdd()!!%u",key, key);
+		sprintf(value, "%uzerokwerii939kdd,cgrfkg-@$$$**%u&XXZZamvbzc44k445i0915323/=-d2224===++--dkeiwnd,.,.,aamggnvcxvzczz|<>!-slsdshssrq2934745755mbikdd()!!%u",key, key, key);
 		db.cursor->set_value(db.cursor, value);
 		if ((ret = db.cursor->insert(db.cursor)) != 0){
 			printf("insert k/v failed, code = %u\n", ret);
@@ -86,7 +86,7 @@ static void* write_thr(void* arg)
 }
 
 #define COUNT		1000000
-#define THREAD_NUM	16
+#define THREAD_NUM	1
 #define READ_COUNT  20000
 
 static void* read_thr(void* arg)
@@ -128,7 +128,12 @@ static void* read_thr(void* arg)
 }
 
 
-#define WT_CONFIG "create,cache_size=1GB,log=(archive=,compressor=,enabled=false,file_max=200MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so]"
+#define WT_CONFIG "create,cache_size=1GB,log=(archive=,compressor=,enabled=false,file_max=200MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so],statistics=(all=1)"
+
+static FILE *logfp;				/* Log file */
+
+static int  handle_error(WT_EVENT_HANDLER *, WT_SESSION *, int, const char *);
+static int  handle_message(WT_EVENT_HANDLER *, WT_SESSION *, const char *);
 
 int main(int argc, const char* argv[])
 {
@@ -146,6 +151,13 @@ int main(int argc, const char* argv[])
 	struct timeval e, b;
 	uint32_t delay = 0;
 
+	static WT_EVENT_HANDLER event_handler = {
+		handle_error,
+		handle_message,
+		NULL,
+		NULL	/* Close handler. */
+	};
+
 	if (argc != 2)
 		return;
 	
@@ -156,8 +168,9 @@ int main(int argc, const char* argv[])
 	const char* home = "WT_HOME";
 
 	ret = system("rm -rf WT_HOME && mkdir WT_HOME");
+	logfp = fopen("test.log", "w");
 
-	if ((ret = wiredtiger_open(home, NULL, WT_CONFIG, &conn) != 0)){
+	if ((ret = wiredtiger_open(home, &event_handler, WT_CONFIG, &conn) != 0)){
 		printf("wiredtiger_open failed!\n");
 		exit(0);
 	}
@@ -182,13 +195,14 @@ int main(int argc, const char* argv[])
 		printf("create checkpiont failed!\n");
 	else
 		printf("finish checkpoint!\n");
+	
 
 	gettimeofday(&e, NULL);
 	delay = 1000 * (e.tv_sec - b.tv_sec) + (e.tv_usec - b.tv_usec) / 1000;
 	printf("inerst row count = %u, insert tps = %u\n", total_count, total_count*1000/delay);
 
 	getchar();
-
+	
 	gettimeofday(&b, NULL);
 	for (i = 0; i < THREAD_NUM; i++){
 		pthread_create(ids + i, NULL, read_thr, NULL);
@@ -199,13 +213,45 @@ int main(int argc, const char* argv[])
 	gettimeofday(&e, NULL);
 	delay = 1000 * (e.tv_sec - b.tv_sec) + (e.tv_usec - b.tv_usec) / 1000;
 	printf("query tps = %u\n", (THREAD_NUM * READ_COUNT) * 1000 / delay);
-
+	
+	printf("finish query\n");
 	getchar();
 
 	clean(&db);
 
+	printf("find clean session\n");
+	getchar();
+
 close_conn:
 	if ((ret = conn->close(conn, NULL)) != 0)
 		printf("wiredtiger_close failed!\n");
+	else{
+		printf("last getchar!\n");
+		getchar();
+	}
+
+	fclose(logfp);
+}
+
+static int
+handle_error(WT_EVENT_HANDLER *handler, WT_SESSION *session, int error, const char *errmsg)
+{
+	(void)(handler);
+	(void)(session);
+	(void)(error);
+
+	return (fprintf(stderr, "%s\n", errmsg) < 0 ? -1 : 0);
+}
+
+static int
+handle_message(WT_EVENT_HANDLER *handler, WT_SESSION *session, const char *message)
+{
+	(void)(handler);
+	(void)(session);
+
+	if (logfp != NULL)
+		return (fprintf(logfp, "%s\n", message) < 0 ? -1 : 0);
+
+	return (printf("%s\n", message) < 0 ? -1 : 0);
 }
 

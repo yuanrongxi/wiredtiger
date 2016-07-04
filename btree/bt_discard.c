@@ -196,7 +196,7 @@ void __wt_free_ref(WT_SESSION_IMPL* session, WT_PAGE* page, WT_REF* ref, int fre
 }
 
 /* Õ∑≈index entry∂‘œÛ*/
-void __wt_free_ref_index(WT_SESSION_IMPL* session, WT_PAGE* page, WT_PAGE_INDEX* pindex, index free_pages)
+void __wt_free_ref_index(WT_SESSION_IMPL* session, WT_PAGE* page, WT_PAGE_INDEX* pindex, int free_pages)
 {
 	uint32_t i;
 
