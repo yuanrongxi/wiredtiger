@@ -20,8 +20,8 @@ static int wcount = 0;
 uint64_t total_count = 0;
 WT_CONNECTION *conn;
 
-#define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB,os_cache_max=1GB"
-#define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB,os_cache_max=1GB"
+#define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB,os_cache_max=256MB"
+#define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB,os_cache_max=256MB"
 
 static int setup(db_info_t* info, int create_table)
 {
@@ -73,7 +73,7 @@ static void* write_thr(void* arg)
 
 	for (key = item->start; key < item->end; key++){
 		db.cursor->set_key(db.cursor, key);
-		sprintf(value, "%uzerokwerii939kdd,cgrfkg-@$$$**%u&XXZZamvbzc44k445i0915323/=-d2224===++--dkeiwnd,.,.,aamggnvcxvzczz|<>!-slsdshssrq2934745755mbikdd()!!%u",key, key, key);
+		sprintf(value, "%uzeyyrgdfgdfg.t66784674446rokwerii939kdd,cgrfkg-@$$$**%u&XXZZamvbzc44k445i0915323/=-d2224===++--dkeiwnd,.,.,aamggnvcxvzczz|<>!-slsdshssrq2934745755mbikdd()!!%uslkweidnziend9*&&7634>>,skseinxslfsienninsdkisdf!!@sflsflsfsdfinzzinf!!!sdfslflsiendndisnziendidnwwwncidsd121232343!!sflskfwwieennsweidnsdifnsdfsdfsddddddfffggjjweneiwebeirrbsl39458745734flsdfzzzn????    ---=-09998776363827373333634.,,mnbbzcueeuee",key, key, key);
 		db.cursor->set_value(db.cursor, value);
 		if ((ret = db.cursor->insert(db.cursor)) != 0){
 			printf("insert k/v failed, code = %u\n", ret);
@@ -85,9 +85,10 @@ static void* write_thr(void* arg)
 	return NULL;
 }
 
-#define COUNT		1000000
-#define THREAD_NUM	1
-#define READ_COUNT  20000
+#define COUNT			1000000
+#define RD_THREAD_NUM	32
+#define WR_THREAD_NUM	16
+#define READ_COUNT		20000
 
 static void* read_thr(void* arg)
 {
@@ -128,7 +129,7 @@ static void* read_thr(void* arg)
 }
 
 
-#define WT_CONFIG "create,cache_size=1GB,log=(archive=,compressor=,enabled=false,file_max=200MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so],statistics=(all=1)"
+#define WT_CONFIG "create,cache_size=1GB,log=(archive=,compressor=,enabled=false,file_max=512MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so],statistics=(all=1)"
 
 static FILE *logfp;				/* Log file */
 
@@ -145,8 +146,9 @@ int main(int argc, const char* argv[])
 	int per_count = 0;
 
 	int i;
-	item_t item[THREAD_NUM];
-	pthread_t ids[THREAD_NUM];
+	item_t item[WR_THREAD_NUM];
+	pthread_t wids[WR_THREAD_NUM];
+	pthread_t rids[RD_THREAD_NUM];
 
 	struct timeval e, b;
 	uint32_t delay = 0;
@@ -180,14 +182,14 @@ int main(int argc, const char* argv[])
 
 	gettimeofday(&b, NULL);
 
-	for (i = 0; i < THREAD_NUM; i++){
-		item[i].start = i * (total_count / THREAD_NUM);
-		item[i].end = (i + 1)*(total_count / THREAD_NUM);
-		pthread_create(ids + i, NULL, write_thr, &item[i]);
+	for (i = 0; i < WR_THREAD_NUM; i++){
+		item[i].start = i * (total_count / WR_THREAD_NUM);
+		item[i].end = (i + 1)*(total_count / WR_THREAD_NUM);
+		pthread_create(wids + i, NULL, write_thr, &item[i]);
 	}
 
-	for (i = 0; i < THREAD_NUM; i++)
-		pthread_join(ids[i], NULL);
+	for (i = 0; i < WR_THREAD_NUM; i++)
+		pthread_join(wids[i], NULL);
 
 	printf("insert finished!\n");
 
@@ -204,15 +206,15 @@ int main(int argc, const char* argv[])
 	getchar();
 	
 	gettimeofday(&b, NULL);
-	for (i = 0; i < THREAD_NUM; i++){
-		pthread_create(ids + i, NULL, read_thr, NULL);
+	for (i = 0; i < RD_THREAD_NUM; i++){
+		pthread_create(rids + i, NULL, read_thr, NULL);
 	}
-	for (i = 0; i < THREAD_NUM; i++)
-		pthread_join(ids[i], NULL);
+	for (i = 0; i < RD_THREAD_NUM; i++)
+		pthread_join(rids[i], NULL);
 
 	gettimeofday(&e, NULL);
 	delay = 1000 * (e.tv_sec - b.tv_sec) + (e.tv_usec - b.tv_usec) / 1000;
-	printf("query tps = %u\n", (THREAD_NUM * READ_COUNT) * 1000 / delay);
+	printf("query tps = %u\n", (RD_THREAD_NUM * READ_COUNT * 1000 / delay));
 	
 	printf("finish query\n");
 	getchar();

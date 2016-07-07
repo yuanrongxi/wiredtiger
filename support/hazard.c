@@ -41,7 +41,7 @@ int __wt_hazard_set(WT_SESSION_IMPL* session, WT_REF* ref, int* busyp)
 		/*发布新设置的hazard pointer，这里有内存屏障为了写生效，防止先执行内存屏障后面的代码*/
 		WT_FULL_BARRIER();
 
-		/*有可能多个线程同时执行hp->page = ref->page， 这个时候设置为无效设置，并返回忙状态，告诉上层线程可能需要重试*/
+		/*有可能多个线程同时执行hp->page = ref->page， 这个时候可能出现其他线程把page 驱逐出内存，这时候不应该返回hazard pointer，而是设置一个忙状态进行等待*/
 		if (ref->page == hp->page && ref->state == WT_REF_MEM) {
 			++session->nhazard;
 			return 0;
@@ -93,7 +93,7 @@ void __wt_hazard_close(WT_SESSION_IMPL* session)
 		}
 	}
 
-	/*hazard 列表中没有hazard pointer,直接返回，只有这两个值判断一致方可视为没有hazard pointer,在多线程执行下，这两值在执行的各个阶段有可能不一致*/
+	/*hazard arrays是空的，直接返回*/
 	if (session->nhazard == 0 && !found)
 		return;
 

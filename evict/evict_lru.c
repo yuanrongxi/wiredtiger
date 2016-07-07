@@ -792,7 +792,7 @@ retry:
 		/* Ignore non-file handles, or handles that aren't open. */
 		if (!WT_PREFIX_MATCH(dhandle->name, "file:") || !F_ISSET(dhandle, WT_DHANDLE_OPEN))
 			continue;
-
+		/*从上次walk的btree对象开始walk evict page*/
 		if (cache->evict_file_next != NULL && cache->evict_file_next != dhandle)
 			continue;
 		cache->evict_file_next = NULL;
@@ -829,6 +829,7 @@ retry:
 		/*获得一个dhandle对应的BTREE对象*/
 		__wt_spin_lock(session, &cache->evict_walk_lock);
 		if (!F_ISSET(btree, WT_BTREE_NO_EVICTION)) {
+			/*根据evict条件，在各个BTREE上检查可以淘汰的page,并将page加入到evict lru queue中*/
 			WT_WITH_DHANDLE(session, dhandle, ret = __evict_walk_file(session, &slot, flags));
 			WT_ASSERT(session, session->split_gen == 0);
 		}
@@ -858,6 +859,7 @@ retry:
 	* Try two passes through all the files, give up when we have some
 	* candidates and we aren't finding more.  Take care not to skip files
 	* on subsequent passes.
+	* 如果是evict old gen,尽量获取多的evict page到lru queue中
 	*/
 	if (!F_ISSET(cache, WT_CACHE_CLEAR_WALKS) && ret == 0 && slot < max_entries 
 		&& (retries < 2  || (!LF_ISSET(WT_EVICT_PASS_WOULD_BLOCK) && retries < 10 && (slot == cache->evict_entries || slot > start_slot)))) {
@@ -866,7 +868,7 @@ retry:
 		++retries;
 		goto retry;
 	}
-
+	/*保存本次walk的btree handle位置*/
 	cache->evict_file_next = dhandle;
 	cache->evict_entries = slot;
 
@@ -967,6 +969,7 @@ static int __evict_walk_file(WT_SESSION_IMPL* session, u_int* slotp, uint32_t fl
 		* future and move on, give readers a chance to start
 		* updating the read generation.
 		* page不能淘汰，将他的read_gen设置的和cache一直，防止淘汰判断
+		* 一般设置成WT_READGEN_NOTSET表示这个page正在被创建，这是不能被淘汰的
 		*/
 		if (page->read_gen == WT_READGEN_NOTSET){
 			page->read_gen = __wt_cache_read_gen_set(session);
@@ -1185,7 +1188,9 @@ int __wt_cache_wait(WT_SESSION_IMPL* session, int full)
 		* trying again.
 		* 如果evict是个最早的事务，那么会导致系统中所有其他的事务等待这个事务，
 		* 造成stuck状态，那么我们在evction server再次尝试之前放弃掉这个事务，
-		* 防止系统等待太久
+		* 防止系统等待太久,因为最早的事务可能获得了很多page的hazard pointer,
+		* 而evict server thread却在等待hazard pointer的释放,造成lru cache无法
+		* 及时
 		*/
 		if (F_ISSET(cache, WT_CACHE_STUCK) && __wt_txn_am_oldest(session)) {
 			F_CLR(cache, WT_CACHE_STUCK);
