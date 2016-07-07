@@ -2055,7 +2055,7 @@ int __wt_bulk_init(WT_SESSION_IMPL* session, WT_CURSOR_BULK* cbulk)
 		WT_ILLEGAL_VALUE(session);
 	}
 
-	return __rec_split_init(session, r, cbulk->ref, recno, btree->maxleafpage);
+	return __rec_split_init(session, r, cbulk->leaf, recno, btree->maxleafpage);
 }
 
 int __wt_bulk_wrapup(WT_SESSION_IMPL* session, WT_CURSOR_BULK* cbulk)
