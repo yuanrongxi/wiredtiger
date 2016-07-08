@@ -598,7 +598,7 @@ int __wt_evict_file_exclusive_on(WT_SESSION_IMPL* session, int* evict_resetp)
 	return 0;
 }
 
-/*释放btree的独占evict操作权*/
+/*释放btree的独占evict操作权,其实就是将btree设置可以evict的状态*/
 void __wt_evict_file_exclusive_off(WT_SESSION_IMPL *session)
 {
 	WT_BTREE *btree;
