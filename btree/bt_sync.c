@@ -66,7 +66,7 @@ static int __sync_file(WT_SESSION_IMPL* session, int syncop)
 		/*这里使用内存屏障是为了checkpointing立即生效*/
 		btree->checkpointing = 1;
 		WT_FULL_BARRIER();
-
+		/*暂停evict server的工作，让其跳过或者随眠*/
 		WT_ERR(__wt_evict_file_exclusive_on(session, &evict_reset));
 		if (evict_reset)
 			__wt_evict_file_exclusive_off(session);

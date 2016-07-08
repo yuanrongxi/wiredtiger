@@ -20,8 +20,10 @@ static int wcount = 0;
 uint64_t total_count = 0;
 WT_CONNECTION *conn;
 
-#define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB,os_cache_max=256MB"
-#define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB,os_cache_max=256MB"
+uint32_t insert_count = 0;
+
+#define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB, os_cache_max=256MB" /*,os_cache_max=256MB*/
+#define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB" /*os_cache_max=256MB*/
 
 static int setup(db_info_t* info, int create_table)
 {
@@ -78,6 +80,9 @@ static void* write_thr(void* arg)
 		if ((ret = db.cursor->insert(db.cursor)) != 0){
 			printf("insert k/v failed, code = %u\n", ret);
 		}
+		else{
+			__sync_add_and_fetch(&insert_count, 1);
+		}
 	}
 
 	clean(&db);
@@ -87,7 +92,7 @@ static void* write_thr(void* arg)
 
 #define COUNT			1000000
 #define RD_THREAD_NUM	32
-#define WR_THREAD_NUM	16
+#define WR_THREAD_NUM	8
 #define READ_COUNT		20000
 
 static void* read_thr(void* arg)
@@ -128,8 +133,67 @@ static void* read_thr(void* arg)
 	return NULL;
 }
 
+volatile int stat_flag = 1;
+static void* stat_thr(void* arg)
+{
+	struct timeval e, b;
+	uint32_t delay = 0;
 
-#define WT_CONFIG "create,cache_size=1GB,log=(archive=,compressor=,enabled=false,file_max=512MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so],statistics=(all=1)"
+	gettimeofday(&b, NULL);
+	while (stat_flag){
+		gettimeofday(&e, NULL);
+
+		delay = 1000 * (e.tv_sec - b.tv_sec) + (e.tv_usec - b.tv_usec)/1000;
+		if (delay >= 1000){
+			gettimeofday(&b, NULL);
+			printf("pre insert = %u\n", insert_count * 1000 / delay);
+			__sync_lock_release(&insert_count);
+		}
+
+		usleep(50000);
+	}
+
+	return NULL;
+}
+
+static void* checkpoint_thr(void* arg)
+{
+	db_info_t db = { NULL, NULL };
+	struct timeval e, b;
+	uint32_t delay = 0;
+	int ret;
+
+	if (setup(&db, 0) != 0){
+		printf("checkpoint thread setup db failed!\n");
+		return NULL;
+	}
+
+	gettimeofday(&b, NULL);
+
+	while (stat_flag){
+		gettimeofday(&e, NULL);
+		delay = (e.tv_sec - b.tv_sec);
+		if (delay >= 30){
+			printf("creating checkpiont....\n");
+			delay = 0;
+			if ((ret = db.session->checkpoint(db.session, NULL)) != 0)
+				printf("create checkpiont failed!\n");
+			else
+				printf("finish checkpoint!\n");
+
+			gettimeofday(&b, NULL);
+		}
+
+		sleep(3);
+	}
+
+
+	clean(&db);
+	return NULL;
+}
+
+/*direct_io=[data]*/
+#define WT_CONFIG "create,cache_size=1GB,direct_io=[data],eviction=(threads_max=4,threads_min=4),log=(archive=,compressor=,enabled=false,file_max=512MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so],statistics=(all=1)"
 
 static FILE *logfp;				/* Log file */
 
@@ -149,6 +213,7 @@ int main(int argc, const char* argv[])
 	item_t item[WR_THREAD_NUM];
 	pthread_t wids[WR_THREAD_NUM];
 	pthread_t rids[RD_THREAD_NUM];
+	pthread_t stat_id, chk_id;
 
 	struct timeval e, b;
 	uint32_t delay = 0;
@@ -180,6 +245,9 @@ int main(int argc, const char* argv[])
 	if (setup(&db, 1) != 0)
 		goto close_conn;
 
+	pthread_create(&stat_id, NULL, stat_thr, NULL);
+	pthread_create(&chk_id, NULL, checkpoint_thr, NULL);
+
 	gettimeofday(&b, NULL);
 
 	for (i = 0; i < WR_THREAD_NUM; i++){
@@ -193,18 +261,12 @@ int main(int argc, const char* argv[])
 
 	printf("insert finished!\n");
 
-	if ((ret = db.session->checkpoint(db.session, NULL)) != 0)
-		printf("create checkpiont failed!\n");
-	else
-		printf("finish checkpoint!\n");
-	
-
 	gettimeofday(&e, NULL);
 	delay = 1000 * (e.tv_sec - b.tv_sec) + (e.tv_usec - b.tv_usec) / 1000;
 	printf("inerst row count = %u, insert tps = %u\n", total_count, total_count*1000/delay);
 
 	getchar();
-	
+	/*
 	gettimeofday(&b, NULL);
 	for (i = 0; i < RD_THREAD_NUM; i++){
 		pthread_create(rids + i, NULL, read_thr, NULL);
@@ -218,6 +280,11 @@ int main(int argc, const char* argv[])
 	
 	printf("finish query\n");
 	getchar();
+	*/
+
+	stat_flag = 0;
+	pthread_join(stat_id, NULL);
+	pthread_join(chk_id, NULL);
 
 	clean(&db);
 
@@ -227,10 +294,6 @@ int main(int argc, const char* argv[])
 close_conn:
 	if ((ret = conn->close(conn, NULL)) != 0)
 		printf("wiredtiger_close failed!\n");
-	else{
-		printf("last getchar!\n");
-		getchar();
-	}
 
 	fclose(logfp);
 }

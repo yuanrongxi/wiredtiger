@@ -610,7 +610,7 @@ void __wt_evict_file_exclusive_off(WT_SESSION_IMPL *session)
 	F_CLR(btree, WT_BTREE_NO_EVICTION);
 }
 
-/* 从lru queue中evict所有的evict pages */
+/*将lru queue中的page全部逐出内存*/
 static int __evict_lru_pages(WT_SESSION_IMPL *session, int is_server)
 {
 	WT_DECL_RET;
@@ -620,7 +620,7 @@ static int __evict_lru_pages(WT_SESSION_IMPL *session, int is_server)
 	return ret;
 }
 
-/*将有evict意向的page添加到LRU QUEUE中*/
+/* 根据read_gen的版本号确定可以evict的page数量，多余的page移出lru queue*/
 static int __evict_lru_walk(WT_SESSION_IMPL *session, uint32_t flags)
 {
 	WT_CACHE *cache;
