@@ -112,6 +112,7 @@ static int __sync_file(WT_SESSION_IMPL* session, int syncop)
 			* Mark the tree dirty: the checkpoint marked it clean
 			* and we can't skip future checkpoints until this page
 			* is written.
+			* 跳过后于checkpoint事务提交的事务修改,因为是SNAPSHOT隔离
 			*/
 
 			if (!WT_PAGE_IS_INTERNAL(page) && F_ISSET(txn, TXN_HAS_SNAPSHOT) && TXNID_LT(txn->snap_max, mod->first_dirty_txn)) {
