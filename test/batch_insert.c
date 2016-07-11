@@ -22,7 +22,7 @@ WT_CONNECTION *conn;
 
 uint32_t insert_count = 0;
 
-#define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB, os_cache_max=256MB" /*,os_cache_max=256MB*/
+#define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB" /*,os_cache_max=256MB*/
 #define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB" /*os_cache_max=256MB*/
 
 static int setup(db_info_t* info, int create_table)
@@ -83,6 +83,7 @@ static void* write_thr(void* arg)
 		else{
 			__sync_add_and_fetch(&insert_count, 1);
 		}
+		usleep(5);
 	}
 
 	clean(&db);
@@ -92,7 +93,7 @@ static void* write_thr(void* arg)
 
 #define COUNT			1000000
 #define RD_THREAD_NUM	32
-#define WR_THREAD_NUM	8
+#define WR_THREAD_NUM	32
 #define READ_COUNT		20000
 
 static void* read_thr(void* arg)
@@ -169,18 +170,19 @@ static void* checkpoint_thr(void* arg)
 	}
 
 	gettimeofday(&b, NULL);
-
+	
 	while (stat_flag){
 		gettimeofday(&e, NULL);
 		delay = (e.tv_sec - b.tv_sec);
 		if (delay >= 30){
-			printf("creating checkpiont....\n");
 			delay = 0;
-			if ((ret = db.session->checkpoint(db.session, NULL)) != 0)
+			printf("creating checkpiont....\n");
+			if ((ret = db.session->checkpoint(db.session, NULL)) != 0){
 				printf("create checkpiont failed!\n");
-			else
+			}
+			else{
 				printf("finish checkpoint!\n");
-
+			}
 			gettimeofday(&b, NULL);
 		}
 
@@ -193,7 +195,7 @@ static void* checkpoint_thr(void* arg)
 }
 
 /*direct_io=[data]*/
-#define WT_CONFIG "create,cache_size=1GB,direct_io=[data],eviction=(threads_max=4,threads_min=4),log=(archive=,compressor=,enabled=false,file_max=512MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so],statistics=(all=1)"
+#define WT_CONFIG "create,cache_size=2GB,eviction=(threads_max=4,threads_min=4),log=(archive=,compressor=,enabled=false,file_max=512MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so],statistics=(all=1)"
 
 static FILE *logfp;				/* Log file */
 
