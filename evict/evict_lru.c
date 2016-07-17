@@ -932,7 +932,7 @@ static int __evict_walk_file(WT_SESSION_IMPL* session, u_int* slotp, uint32_t fl
 			continue;
 		}
 		/*root page²»ÄÜ±»evict*/
-		if (__wt_is_root(ref))
+		if (__wt_ref_is_root(ref))
 			continue;
 
 		page = ref->page;
