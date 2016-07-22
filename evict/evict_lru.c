@@ -500,7 +500,7 @@ static int __evict_clear_walks(WT_SESSION_IMPL* session)
 	return ret;
 }
 
-/*清除当前session对应btree的evict point*/
+/*清除当前session对应btree的evict point,让evict thread停止evict工作*/
 static int __evict_tree_walk_clear(WT_SESSION_IMPL* session)
 {
 	WT_BTREE *btree;

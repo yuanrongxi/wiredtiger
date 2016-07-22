@@ -8,7 +8,7 @@
 	(v) = (val); \
 }while(0)
 
-/*在v=val之后，保证后面所有的读操作不会读到与val不一致的值*/
+/*在v=val之后，保证读到最新的val值*/
 #define WT_ORDERED_READ(v, val) do{ \
 	(v) = (val); \
 	WT_READ_BARRIER(); \

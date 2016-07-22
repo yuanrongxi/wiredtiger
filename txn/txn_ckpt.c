@@ -104,7 +104,7 @@ static int __checkpoint_apply_all(WT_SESSION_IMPL* session, const char* cfg[], i
 		if (op == NULL)
 			continue;
 
-		/*这是什么个意思？__wt_schema_worker！！！*/
+		/*让uri对应的btree file执行op操作函数*/
 		WT_ERR(__wt_buf_fmt(session, tmp, "%.*s", (int)k.len, k.str));
 		if ((ret = __wt_schema_worker(session, tmp->data, op, NULL, cfg, 0)) != 0)
 			WT_ERR_MSG(session, ret, "%s", (const char *)tmp->data);
@@ -331,7 +331,7 @@ int  __wt_txn_checkpoint(WT_SESSION_IMPL* session, const char* cfg[])
 		WT_ERR(__wt_txn_checkpoint_log(session, full, WT_TXN_LOG_CKPT_START, NULL)); /*开始checkpoint*/
 		logging = 1;
 	}
-
+	/*将__checkpoint_write_leaves以后新写入的数据进行reconile操作，并为每个btree file建立checkpoint*/
 	WT_ERR(__checkpoint_apply(session, cfg, __wt_checkpoint));
 	session->dhandle = NULL;
 
@@ -349,7 +349,7 @@ int  __wt_txn_checkpoint(WT_SESSION_IMPL* session, const char* cfg[])
 
 	WT_ERR(__checkpoint_verbose_track(session, "sync completed", &verb_timer));
 
-	/*sync meta file*/
+	/*sync meta file, 对meta table做checkpoint*/
 	session->isolation = txn->isolation = TXN_ISO_READ_UNCOMMITTED;
 	saved_meta_next = session->meta_track_next;
 	session->meta_track_next = NULL;

@@ -170,7 +170,7 @@ err:
 
 	__wt_spin_unlock(session, &btree->flush_lock);
 
-	/*同步写，必须将数据flush*/
+	/*异步刷盘，因为sync_write_leaves选项是checkpoint之前的脏数据落盘，这里采用了异步刷盘不阻塞checkpoint线程*/
 	if (ret == 0 && syncop == WT_SYNC_WRITE_LEAVES)
 		WT_RET(btree->bm->sync(btree->bm, session, 1));
 

@@ -1,6 +1,7 @@
 #include "wiredtiger.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
 #include <time.h>
 #include <sys/time.h>
@@ -21,6 +22,7 @@ uint64_t total_count = 0;
 WT_CONNECTION *conn;
 
 uint32_t insert_count = 0;
+uint32_t insert_size = 0;
 
 #define TAB_META "block_compressor=zlib,key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=16KB,leaf_value_max=16KB" /*,os_cache_max=256MB*/
 #define RAW_META "key_format=i,value_format=S,internal_page_max=16KB,leaf_page_max=64KB,leaf_value_max=64KB" /*os_cache_max=256MB*/
@@ -60,6 +62,8 @@ static void clean(db_info_t* info)
 	}
 }
 
+volatile int stat_flag = 1;
+
 static void* write_thr(void* arg)
 {
 	db_info_t db = { NULL, NULL };
@@ -67,6 +71,8 @@ static void* write_thr(void* arg)
 	char value[1024] = { 0 };
 	int ret;
 	item_t* item = arg;
+	struct timeval e, b;
+	uint32_t max_delay = 0, delay;
 
 	if (setup(&db, 0) != 0){
 		printf("write thread setup db failed!\n");
@@ -74,6 +80,8 @@ static void* write_thr(void* arg)
 	}
 
 	for (key = item->start; key < item->end; key++){
+		gettimeofday(&b, NULL);
+
 		db.cursor->set_key(db.cursor, key);
 		sprintf(value, "%uzeyyrgdfgdfg.t66784674446rokwerii939kdd,cgrfkg-@$$$**%u&XXZZamvbzc44k445i0915323/=-d2224===++--dkeiwnd,.,.,aamggnvcxvzczz|<>!-slsdshssrq2934745755mbikdd()!!%uslkweidnziend9*&&7634>>,skseinxslfsienninsdkisdf!!@sflsflsfsdfinzzinf!!!sdfslflsiendndisnziendidnwwwncidsd121232343!!sflskfwwieennsweidnsdifnsdfsdfsddddddfffggjjweneiwebeirrbsl39458745734flsdfzzzn????    ---=-09998776363827373333634.,,mnbbzcueeuee",key, key, key);
 		db.cursor->set_value(db.cursor, value);
@@ -82,18 +90,26 @@ static void* write_thr(void* arg)
 		}
 		else{
 			__sync_add_and_fetch(&insert_count, 1);
+			__sync_add_and_fetch(&insert_size, strlen(value));
 		}
-		usleep(5);
+
+		gettimeofday(&e, NULL);
+		delay = (e.tv_sec - b.tv_sec) * 1000000 + (e.tv_usec - b.tv_usec);
+		if (max_delay < delay)
+			max_delay = delay;
+		usleep(1);
 	}
 
 	clean(&db);
+
+	/*printf("max delay = %u\n", max_delay);*/
 
 	return NULL;
 }
 
 #define COUNT			1000000
 #define RD_THREAD_NUM	32
-#define WR_THREAD_NUM	32
+#define WR_THREAD_NUM	64
 #define READ_COUNT		20000
 
 static void* read_thr(void* arg)
@@ -134,7 +150,6 @@ static void* read_thr(void* arg)
 	return NULL;
 }
 
-volatile int stat_flag = 1;
 static void* stat_thr(void* arg)
 {
 	struct timeval e, b;
@@ -144,11 +159,12 @@ static void* stat_thr(void* arg)
 	while (stat_flag){
 		gettimeofday(&e, NULL);
 
-		delay = 1000 * (e.tv_sec - b.tv_sec) + (e.tv_usec - b.tv_usec)/1000;
-		if (delay >= 1000){
+		delay = (e.tv_sec - b.tv_sec) * 1000 + (e.tv_usec - b.tv_usec)/1000;
+		if (delay >= 500){
 			gettimeofday(&b, NULL);
-			printf("pre insert = %u\n", insert_count * 1000 / delay);
+			printf("count= %u, size = %uKB\n", insert_count * 1000 / delay, insert_size / delay);
 			__sync_lock_release(&insert_count);
+			__sync_lock_release(&insert_size);
 		}
 
 		usleep(50000);
@@ -157,45 +173,8 @@ static void* stat_thr(void* arg)
 	return NULL;
 }
 
-static void* checkpoint_thr(void* arg)
-{
-	db_info_t db = { NULL, NULL };
-	struct timeval e, b;
-	uint32_t delay = 0;
-	int ret;
-
-	if (setup(&db, 0) != 0){
-		printf("checkpoint thread setup db failed!\n");
-		return NULL;
-	}
-
-	gettimeofday(&b, NULL);
-	
-	while (stat_flag){
-		gettimeofday(&e, NULL);
-		delay = (e.tv_sec - b.tv_sec);
-		if (delay >= 30){
-			delay = 0;
-			printf("creating checkpiont....\n");
-			if ((ret = db.session->checkpoint(db.session, NULL)) != 0){
-				printf("create checkpiont failed!\n");
-			}
-			else{
-				printf("finish checkpoint!\n");
-			}
-			gettimeofday(&b, NULL);
-		}
-
-		sleep(3);
-	}
-
-
-	clean(&db);
-	return NULL;
-}
-
-/*direct_io=[data]*/
-#define WT_CONFIG "create,cache_size=2GB,eviction=(threads_max=4,threads_min=4),log=(archive=,compressor=,enabled=false,file_max=512MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so],statistics=(all=1)"
+/*direct_io=[data], eviction_dirty_target=30*/
+#define WT_CONFIG "create,cache_size=4GB,eviction_dirty_target=50,eviction=(threads_max=2,threads_min=2),checkpoint=(wait=30,log_size=1GB),log=(archive=,compressor=zlib,enabled=false,file_max=512MB,path=,prealloc=,recover=on), extensions=[/usr/local/lib/libwiredtiger_zlib.so],statistics=(all=1)"
 
 static FILE *logfp;				/* Log file */
 
@@ -215,7 +194,7 @@ int main(int argc, const char* argv[])
 	item_t item[WR_THREAD_NUM];
 	pthread_t wids[WR_THREAD_NUM];
 	pthread_t rids[RD_THREAD_NUM];
-	pthread_t stat_id, chk_id;
+	pthread_t stat_id;
 
 	struct timeval e, b;
 	uint32_t delay = 0;
@@ -248,7 +227,6 @@ int main(int argc, const char* argv[])
 		goto close_conn;
 
 	pthread_create(&stat_id, NULL, stat_thr, NULL);
-	pthread_create(&chk_id, NULL, checkpoint_thr, NULL);
 
 	gettimeofday(&b, NULL);
 
@@ -261,13 +239,14 @@ int main(int argc, const char* argv[])
 	for (i = 0; i < WR_THREAD_NUM; i++)
 		pthread_join(wids[i], NULL);
 
+	stat_flag = 0;
+	pthread_join(stat_id, NULL);
+
 	printf("insert finished!\n");
 
 	gettimeofday(&e, NULL);
 	delay = 1000 * (e.tv_sec - b.tv_sec) + (e.tv_usec - b.tv_usec) / 1000;
 	printf("inerst row count = %u, insert tps = %u\n", total_count, total_count*1000/delay);
-
-	getchar();
 	/*
 	gettimeofday(&b, NULL);
 	for (i = 0; i < RD_THREAD_NUM; i++){
@@ -283,10 +262,6 @@ int main(int argc, const char* argv[])
 	printf("finish query\n");
 	getchar();
 	*/
-
-	stat_flag = 0;
-	pthread_join(stat_id, NULL);
-	pthread_join(chk_id, NULL);
 
 	clean(&db);
 

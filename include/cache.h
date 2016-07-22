@@ -96,9 +96,9 @@ struct __wt_cache
 #define	WT_CACHE_POOL_MANAGER	0x01	/* The active cache pool manager */
 #define	WT_CACHE_POOL_RUN	0x02		/* Cache pool thread running */
 #define	WT_CACHE_CLEAR_WALKS	0x04	/* Clear eviction walks */
-#define	WT_CACHE_STUCK		0x08		/* Eviction server is stuck */
+#define	WT_CACHE_STUCK		0x08		/* Eviction server is stuck, sevict server进行了evict等待,没有发生evict动作 */
 #define	WT_CACHE_WALK_REVERSE	0x10	/* Scan backwards for candidates */
-#define	WT_CACHE_WOULD_BLOCK	0x20	/* Pages that would block apps */
+#define	WT_CACHE_WOULD_BLOCK	0x20	/* Pages that would block apps,应用层evict page时page忙或者在内存中发生page split */
 
 /*cache pool's flags type*/
 #define	WT_CACHE_POOL_MANAGED	0x01	/* Cache pool has a manager thread */
