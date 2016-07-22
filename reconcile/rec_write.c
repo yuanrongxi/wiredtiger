@@ -2875,7 +2875,7 @@ err:
 	__wt_scr_free(session, &orig);
 }
 
-/*row store的internal page的reconcile操作*/
+/*row store的I page的reconcile操作*/
 static int __rec_row_int(WT_SESSION_IMPL* session, WT_RECONCILE* r, WT_PAGE* page)
 {
 	WT_ADDR *addr;
