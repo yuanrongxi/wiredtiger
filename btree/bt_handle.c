@@ -366,7 +366,7 @@ err:/*如果错误，需要废弃掉root和分配的leaf page*/
 }
 
 /*创建一个空的leaf page*/
-int __wt_btree_new_leaf_page(WT_SESSION_IMPL* session, WT_PAGE* pagep)
+int __wt_btree_new_leaf_page(WT_SESSION_IMPL* session, WT_PAGE** pagep)
 {
 	WT_BTREE *btree;
 

@@ -168,7 +168,7 @@ int __wt_lsm_tree_set_chunk_size(WT_SESSION_IMPL *session, WT_LSM_CHUNK *chunk)
 	return 0;
 }
 
-/*清除掉一个lsm chunk文件，*/
+/*清除掉一个lsm chunk文件，这个文件可能是BTree文件，也有可能是bloom数据文件*/
 static int __lsm_tree_cleanup_old(WT_SESSION_IMPL* session, const char* uri)
 {
 	WT_DECL_RET;
@@ -245,7 +245,7 @@ int __wt_lsm_tree_create(WT_SESSION_IMPL *session, const char *uri, int exclusiv
 		"LSM trees cannot be configured as column stores");
 
 	WT_RET(__wt_calloc_one(session, &lsm_tree));
-
+	/*对lsm tree进行配置*/
 	WT_ERR(__lsm_tree_set_name(session, lsm_tree, uri));
 
 	WT_ERR(__wt_config_gets(session, cfg, "key_format", &cval));

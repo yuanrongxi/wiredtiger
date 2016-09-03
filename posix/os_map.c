@@ -68,6 +68,9 @@ int __wt_mmap_discard(WT_SESSION_IMPL *session, void *p, size_t size)
 	void *blk = (void *)((uintptr_t)p & ~(uintptr_t)(WT_VM_PAGESIZE - 1));
 	size += WT_PTRDIFF(p, blk);
 
+	if ((ret = posix_madvise(blk, size, POSIX_MADV_DONTNEED)) != 0)
+		WT_RET_MSG(session, ret, "posix_madvise don't need");
+
 	return 0;
 }
 

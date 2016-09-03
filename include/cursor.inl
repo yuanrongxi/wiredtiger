@@ -68,6 +68,7 @@ static inline int __curfile_enter(WT_CURSOR_BTREE *cbt)
 static inline int __curfile_leave(WT_CURSOR_BTREE* cbt)
 {
 	WT_SESSION_IMPL* session;
+	WT_DECL_RET;
 
 	session = (WT_SESSION_IMPL *)cbt->iface.session;
 
@@ -83,10 +84,10 @@ static inline int __curfile_leave(WT_CURSOR_BTREE* cbt)
 
 	cbt->page_deleted_count = 0;
 
-	WT_RET(__wt_page_release(session, cbt->ref, 0));
+	ret = __wt_page_release(session, cbt->ref, 0);
 	cbt->ref = NULL;
 
-	return 0;
+	return ret;
 }
 
 /*对session的dhandle的in-use计数器 +１，如果刚开始为0时，调用这个函数过后，其timeofdeath将置为0*/
